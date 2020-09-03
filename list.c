@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 
-/*	
+/*
 Allocate a linked list node with a given key
 Allocate a node using malloc(),
 initialize the pointers to NULL,
@@ -11,7 +11,12 @@ set the key value to the key provided by the argument
  */
 struct list_node *allocate_node_with_key(int key)
 {
-	return NULL;
+    struct list_node* new_node = (struct list_node*)malloc(sizeof(struct list_node));
+    new_node->key = key;
+    new_node->next = NULL;
+    new_node->prev = NULL;
+    new_node->value = NULL;
+	return new_node;
 }
 
 /*	
