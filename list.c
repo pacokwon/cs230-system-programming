@@ -19,12 +19,21 @@ struct list_node *allocate_node_with_key(int key)
 	return new_node;
 }
 
-/*	
+/*
 Initialize the key values of the head/tail list nodes (I used -1 key values)
 Also, link the head and tail to point to each other
  */
 void initialize_list_head_tail(struct list_node *head, struct list_node *tail)
 {
+    // initialize key values
+    head->key = -1;
+    tail->key = -1;
+
+    // link head and tail
+    tail->next = head;
+    tail->prev = head;
+    head->prev = tail;
+    head->next = tail;
 	return;
 }
 
