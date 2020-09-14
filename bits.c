@@ -199,6 +199,7 @@ int byteSwap(int x, int n, int m) {
 
     return (x & ~(nMask | mMask)) | (nthByte << mOffset | mthByte << nOffset);
 }
+
 /*
  * rotateLeft - Rotate x to the left by n
  *   Can assume that 0 <= n <= 31
@@ -208,8 +209,15 @@ int byteSwap(int x, int n, int m) {
  *   Rating: 3
  */
 int rotateLeft(int x, int n) {
-  return 2;
+    int msb = 0x1 << 31;
+    int mask = (msb >> n) << 1;
+
+    int sub = 32 + (~n + 1);
+    int subMask = ~((msb >> sub) << 1);
+
+    return (x & ~mask) << n | ((x & mask) >> sub & subMask);
 }
+
 /*
  * leftBitCount - returns count of number of consective 1's in
  *     left-hand (most significant) end of word.
