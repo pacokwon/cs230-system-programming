@@ -434,8 +434,14 @@ int howManyBits(int x) {
  *   Rating: 2
  */
 unsigned float_abs(unsigned uf) {
-  return 2;
+    unsigned int msbMasked = uf & 0x7FFFFFFF;
+
+    if (msbMasked > 0x7F800000)
+        return uf;
+    else
+        return msbMasked;
 }
+
 /*
  * float_f2i - Return bit-level equivalent of expression (int) f
  *   for floating point argument f.
