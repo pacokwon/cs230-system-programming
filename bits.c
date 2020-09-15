@@ -285,7 +285,8 @@ int absVal(int x) {
  *   Rating: 1
  */
 int tmax(void) {
-  return 2;
+    int msb = 0x1 << 31;
+    return msb + (msb >> 31);
 }
 /*
  * fitsShort - return 1 if x can be represented as a
