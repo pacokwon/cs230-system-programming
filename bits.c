@@ -316,8 +316,14 @@ int fitsShort(int x) {
  *   Rating: 3
  */
 int rempwr2(int x, int n) {
-    return 2;
+    int mask = (1 << n) + (~0x1 + 1); // 0 ..(32 - n).. 01 ..(n).. 1
+    int masked = x & mask; // mask front n bits
+    int zeroMask = ~(!!masked) + 1; // 111...111 if not zero, 000...000 if zero
+    int msbFilled = x >> 31;
+
+    return (zeroMask & (msbFilled & ~mask)) | masked;
 }
+
 /*
  * sign - return 1 if positive, 0 if zero, and -1 if negative
  *  Examples: sign(130) = 1
