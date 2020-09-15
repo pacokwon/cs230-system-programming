@@ -360,8 +360,14 @@ int isNonNegative(int x) {
  *   Rating: 3
  */
 int isGreater(int x, int y) {
-  return 2;
+    int signDiff = x ^ y; // msb denotes sign difference
+
+    int signSameAndXGreater = ~(signDiff | (~y + x)); // msb 1 when signs are same AND x > y
+    int signDiffAndYNegative = y & signDiff; // msb 1 when signs are different AND y is negative
+
+    return ((signDiffAndYNegative | signSameAndXGreater) >> 31) & 0x1;
 }
+
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
  *  Examples: howManyBits(12) = 5
