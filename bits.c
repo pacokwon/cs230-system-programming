@@ -288,6 +288,7 @@ int tmax(void) {
     int msb = 0x1 << 31;
     return msb + (msb >> 31);
 }
+
 /*
  * fitsShort - return 1 if x can be represented as a
  *   16-bit, two's complement integer.
@@ -297,8 +298,15 @@ int tmax(void) {
  *   Rating: 1
  */
 int fitsShort(int x) {
-  return 2;
+    int msbHalf = x >> 15;
+    int half = x >> 16;
+
+    int firstHalfNotUniform = x >> 31 ^ half;
+    int boundaryBitsDifferent = (msbHalf ^ half) & 0x1; // (msbHalf & 0x1) ^ (half & 0x1)
+
+    return !(firstHalfNotUniform | boundaryBitsDifferent); // !firstHalfNotUniform & !boundaryBitsDifferent
 }
+
 /*
  * rempwr2 - Compute x%(2^n), for 0 <= n <= 30
  *   Negative arguments should yield negative remainders
