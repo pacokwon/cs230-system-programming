@@ -333,8 +333,14 @@ int rempwr2(int x, int n) {
  *  Rating: 2
  */
 int sign(int x) {
-    return 2;
+    int isNotZero = !!x; // all zero if x is zero, all 1 otherwise
+    int msb = x >> 31; // -1 if x is negative, 0 if x is positive or 0
+
+    // if msb is -1, return -1
+    // if msb is 0, return msb + isNotZero
+    return msb | (~msb & (msb + isNotZero));
 }
+
 /*
  * isNonNegative - return 1 if x >= 0, return 0 otherwise
  *   Example: isNonNegative(-1) = 0.  isNonNegative(0) = 1.
