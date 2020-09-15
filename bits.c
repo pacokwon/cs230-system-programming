@@ -334,11 +334,11 @@ int rempwr2(int x, int n) {
  */
 int sign(int x) {
     int isNotZero = !!x; // all zero if x is zero, all 1 otherwise
-    int msb = x >> 31; // -1 if x is negative, 0 if x is positive or 0
+    int msbFilled = x >> 31; // -1 if x is negative, 0 if x is positive or 0
 
     // if msb is -1, return -1
     // if msb is 0, return msb + isNotZero
-    return msb | (~msb & (msb + isNotZero));
+    return msbFilled | (~msbFilled & (msbFilled + isNotZero));
 }
 
 /*
@@ -349,8 +349,9 @@ int sign(int x) {
  *   Rating: 3
  */
 int isNonNegative(int x) {
-  return 2;
+    return !(x >> 31);
 }
+
 /*
  * isGreater - if x > y  then return 1, else return 0
  *   Example: isGreater(4,5) = 0, isGreater(5,4) = 1
