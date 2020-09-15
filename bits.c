@@ -272,8 +272,12 @@ int leftBitCount(int x) {
  *   Rating: 4
  */
 int absVal(int x) {
-  return 2;
+    int absMask = x >> 31;
+    x = absMask ^ x;
+    x = x + (~absMask + 1);
+    return x;
 }
+
 /*
  * TMax - return maximum two's complement integer
  *   Legal ops: ! ~ & ^ | + << >>
