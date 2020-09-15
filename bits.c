@@ -375,8 +375,47 @@ int isGreater(int x, int y) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+    // basically, it's 33 - leftBitCount(x ^ msbMask)
+
+    int msbMask = ~(x >> 31);
+    int x55 = 0x55;
+    int x33 = 0x33;
+    int x0F0F = 0x0F;
+    int x00FF = 0xFF;
+    int xFFFF = 0xFF;
+
+    x55 = x55 + (x55 << 8);
+    x55 = x55 + (x55 << 16);
+
+    x33 = x33 + (x33 << 8);
+    x33 = x33 + (x33 << 16);
+
+    x0F0F = x0F0F + (x0F0F << 8);
+    x0F0F = x0F0F + (x0F0F << 16);
+
+    x00FF = x00FF + (x00FF << 16);
+
+    xFFFF = xFFFF + (xFFFF << 8);
+
+    x = x ^ msbMask;
+
+    x = ~x;
+    x = x | x >> 16;
+    x = x | x >> 8;
+    x = x | x >> 4;
+    x = x | x >> 2;
+    x = x | x >> 1;
+    x = ~x;
+
+    x = (x & x55  ) + ((x >> 1 ) & x55  );
+    x = (x & x33  ) + ((x >> 2 ) & x33  );
+    x = (x & x0F0F) + ((x >> 4 ) & x0F0F);
+    x = (x & x00FF) + ((x >> 8 ) & x00FF);
+    x = (x & xFFFF) + ((x >> 16) & xFFFF);
+
+    return 34 + ~x;
 }
+
 /*
  * float_abs - Return bit-level equivalent of absolute value of f for
  *   floating point argument f.
