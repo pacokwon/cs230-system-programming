@@ -491,8 +491,9 @@ int float_f2i(unsigned uf) {
     else
         return fraction;
 }
+
 /*
- * float_half - Return bit-level equivalent of expression 0.5*f for
+ *float_half - Return bit-level equivalent of expression 0.5*f for
  *   floating point argument f.
  *   Both the argument and result are passed as unsigned int's, but
  *   they are to be interpreted as the bit-level representation of
@@ -503,5 +504,37 @@ int float_f2i(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_half(unsigned uf) {
-  return 2;
+    unsigned int expMask = 0x7F800000u;
+    unsigned int zeroMask = 0x7FFFFFFFu;
+    unsigned int fracMask = 0x007FFFFFu;
+    unsigned int msbMask = 0x80000000u;
+
+    int exponent = ((uf & expMask) >> 23);
+    unsigned int fraction = uf & fracMask;                  // only fraction
+    unsigned int fractionReverseMasked = uf & ~fracMask;    // uf except fraction
+    unsigned int msb = uf & msbMask;
+
+    unsigned int lsb = fraction & 0x1;
+    unsigned int shiftedFraction = fraction >> 1;
+    unsigned int roundedFraction = shiftedFraction;
+
+    if ((uf & zeroMask) == 0)
+        return uf;
+
+    if (exponent == 255)
+        return uf;
+
+    if (lsb)
+        roundedFraction = roundedFraction + (shiftedFraction & 0x1);
+
+    if (exponent == 0) {            // denormalized number. shift fraction
+        if (fraction == fracMask)   // all ones
+            return fractionReverseMasked | 0x00400000u;
+        else
+            return fractionReverseMasked | roundedFraction;
+    } else if (exponent == 1) {
+        return msb | roundedFraction | 0x00400000u;
+    } else {
+        return msb | ((exponent - 1) << 23) | fraction;
+    }
 }
