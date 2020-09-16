@@ -455,7 +455,41 @@ unsigned float_abs(unsigned uf) {
  *   Rating: 4
  */
 int float_f2i(unsigned uf) {
-  return 2;
+    unsigned int signMask = 0x80000000u;
+    unsigned int expMask = 0x7F800000u;
+    unsigned int fracMask = 0x007FFFFFu;
+
+    const int INT_MIN = 0x80000000;
+
+    unsigned int sign = uf & signMask;
+    unsigned int msbMasked = uf & 0x7FFFFFFF;
+    int exponent = ((uf & expMask) >> 23) - 127;
+    int fraction = (uf & fracMask) | (1 << 24);
+    unsigned int rounded = fraction << (8 + exponent);
+
+    if (msbMasked >= expMask)
+        return 0x80000000u;
+
+    if (exponent < 0)
+        return 0;
+
+    if (exponent >= 31)
+        return INT_MIN;
+
+    if (exponent > 24) return fraction << (exponent - 24);
+
+    fraction = fraction >> (24 - exponent);
+    if (rounded > 0x80000000u)
+        fraction = fraction + 1;
+    else if (rounded < 0x80000000u)
+        fraction = fraction;
+    else
+        fraction = fraction + fraction & 0x1;
+
+    if (sign)
+        return -fraction;
+    else
+        return fraction;
 }
 /*
  * float_half - Return bit-level equivalent of expression 0.5*f for
