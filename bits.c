@@ -212,7 +212,7 @@ int rotateLeft(int x, int n) {
     int msb = 0x1 << 31;
     int mask = (msb >> n) << 1;
 
-    int sub = 32 + (~n + 1);
+    int sub = 33 + ~n;
     int subMask = ~((msb >> sub) << 1);
 
     return (x & ~mask) << n | ((x & mask) >> sub & subMask);
