@@ -227,40 +227,38 @@ int rotateLeft(int x, int n) {
  *   Rating: 4
  */
 int leftBitCount(int x) {
-    int x55 = 0x55;
-    int x33 = 0x33;
-    int x0F0F = 0x0F;
-    int x00FF = 0xFF;
-    int xFFFF = 0xFF;
-
-    x55 = x55 + (x55 << 8);
-    x55 = x55 + (x55 << 16);
-
-    x33 = x33 + (x33 << 8);
-    x33 = x33 + (x33 << 16);
-
-    x0F0F = x0F0F + (x0F0F << 8);
-    x0F0F = x0F0F + (x0F0F << 16);
-
-    x00FF = x00FF + (x00FF << 16);
-
-    xFFFF = xFFFF + (xFFFF << 8);
+    int n = 0;
+    int msb = 1 << 31;
+    int half;
 
     x = ~x;
-    x = x | x >> 16;
-    x = x | x >> 8;
-    x = x | x >> 4;
-    x = x | x >> 2;
-    x = x | x >> 1;
-    x = ~x;
+    /* half = (~!(x & (msb >> 15)) + 1) & 16; */
+    half = !(x & (msb >> 15)) << 4;
+    n += half;
+    x <<= half;
 
-    x = (x & x55  ) + ((x >> 1 ) & x55  );
-    x = (x & x33  ) + ((x >> 2 ) & x33  );
-    x = (x & x0F0F) + ((x >> 4 ) & x0F0F);
-    x = (x & x00FF) + ((x >> 8 ) & x00FF);
-    x = (x & xFFFF) + ((x >> 16) & xFFFF);
+    half = !(x & (msb >> 7)) << 3;
+    n += half;
+    x <<= half;
 
-    return x;
+    half = !(x & (msb >> 3)) << 2;
+    n += half;
+    x <<= half;
+
+    half = !(x & (msb >> 1)) << 1;
+    n += half;
+    x <<= half;
+
+    half = !(x & msb);
+    n += half;
+    x <<= half;
+
+    half = !(x & msb);
+
+    n += half;
+
+    return n;
+
 }
 
 /*
@@ -285,8 +283,7 @@ int absVal(int x) {
  *   Rating: 1
  */
 int tmax(void) {
-    int msb = 0x1 << 31;
-    return msb + (msb >> 31);
+    return ~(0x1 << 31);
 }
 
 /*
@@ -316,7 +313,7 @@ int fitsShort(int x) {
  *   Rating: 3
  */
 int rempwr2(int x, int n) {
-    int mask = (1 << n) + (~0x1 + 1); // 0 ..(32 - n).. 01 ..(n).. 1
+    int mask = (1 << n) + ~0; // 0 ..(32 - n).. 01 ..(n).. 1
     int masked = x & mask; // mask front n bits
     int zeroMask = ~(!!masked) + 1; // 111...111 if not zero, 000...000 if zero
     int msbFilled = x >> 31;
