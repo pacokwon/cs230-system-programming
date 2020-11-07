@@ -83,8 +83,9 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
-/* Helper functions defined by me */
+/* User defined helper functions */
 pid_t Fork(void);
+void jobs_cmd(void);
 
 /*
  * main - The shell's main routine
@@ -188,6 +189,7 @@ void eval(char *cmdline) {
     }
 
     if (bg) { // runs in background
+        addjob(jobs, pid, BG, cmdline);
         printf("(%d) %s", pid, cmdline);
     } else {  // runs in foreground
         if (waitpid(pid, NULL, 0) < 0)
@@ -267,7 +269,7 @@ int builtin_cmd(char **argv)
     if (!strcmp(argv[0], "quit")) {
         exit(0);
     } else if (!strcmp(argv[0], "jobs")) {
-        // TODO: execute jobs command
+        jobs_cmd();
         return 1;
     } else if (!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
         do_bgfg(argv);
@@ -557,4 +559,13 @@ pid_t Fork(void) {
         unix_error("Fork Error!");
 
     return pid;
+}
+
+void jobs_cmd(void) {
+    for (int i = 0; i < MAXJOBS; i++) {
+        if (jobs[i].pid == 0) continue;
+
+        /* [1] (1032) Running ./myspin 2 & */
+        printf("[%d] (%d) Running %s", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
+    }
 }
