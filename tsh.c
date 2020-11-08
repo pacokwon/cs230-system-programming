@@ -85,7 +85,9 @@ handler_t *Signal(int signum, handler_t *handler);
 
 /* User defined helper functions */
 pid_t Fork(void);
-void jobs_cmd(void);
+void Kill(pid_t pid, int sig);
+void Setpgid(pid_t pid, pid_t pgid);
+void Write(int fd, const char* buf, size_t nbyte);
 
 /*
  * main - The shell's main routine
@@ -181,7 +183,10 @@ void eval(char *cmdline) {
         return;
     }
 
-    if ((pid = Fork()) == 0) { // child process
+    /* printf("hello"); */
+    pid = Fork();
+    if (pid == 0) { // child process
+        Setpgid(0, 0);          // we don't want child process to have the same pgid as shell
         if (execve(argv[0], argv, environ) < 0) {
             printf("%s: Command not found.\n", argv[0]);
             exit(0); // terminate child process
@@ -190,10 +195,10 @@ void eval(char *cmdline) {
 
     if (bg) { // runs in background
         addjob(jobs, pid, BG, cmdline);
-        printf("(%d) %s", pid, cmdline);
+        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
     } else {  // runs in foreground
-        if (waitpid(pid, NULL, 0) < 0)
-            unix_error("waitfg: waitpid error!");
+        addjob(jobs, pid, FG, cmdline);
+        waitfg(pid);
     }
 
     return;
@@ -269,7 +274,7 @@ int builtin_cmd(char **argv)
     if (!strcmp(argv[0], "quit")) {
         exit(0);
     } else if (!strcmp(argv[0], "jobs")) {
-        jobs_cmd();
+        listjobs(jobs);
         return 1;
     } else if (!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")) {
         do_bgfg(argv);
@@ -552,20 +557,46 @@ void sigquit_handler(int sig)
 /***********************
  * User defined helper functions
  ***********************/
+/*
+ * Fork - safe wrapper for fork()
+ */
 pid_t Fork(void) {
     pid_t pid;
 
     if ((pid = fork()) < 0)
-        unix_error("Fork Error!");
+        unix_error("fork() Error!");
 
     return pid;
 }
 
-void jobs_cmd(void) {
-    for (int i = 0; i < MAXJOBS; i++) {
-        if (jobs[i].pid == 0) continue;
+/*
+ * Kill - safe wrapper for kill()
+ */
+void Kill(pid_t pid, int sig) {
+    if (kill(pid, sig) < 0)
+        unix_error("kill() Error!");
 
-        /* [1] (1032) Running ./myspin 2 & */
-        printf("[%d] (%d) Running %s", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
+    return;
+}
+
+/*
+ * Setpgid - safe wrapper for setpgid()
+ */
+void Setpgid(pid_t pid, pid_t pgid) {
+    if (setpgid(pid, pgid) < -1) {
+        unix_error("setpgid() Error!");
     }
+
+    return;
+}
+
+/*
+ * Write - safe wrapper for write()
+ */
+void Write(int fd, const char* buf, size_t nbyte) {
+    if (write(fd, buf, nbyte) <= 0) {
+        unix_error("write() Error!");
+    }
+
+    return;
 }
