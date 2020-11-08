@@ -183,13 +183,12 @@ void eval(char *cmdline) {
         return;
     }
 
-    /* printf("hello"); */
     pid = Fork();
     if (pid == 0) { // child process
         Setpgid(0, 0);          // we don't want child process to have the same pgid as shell
         if (execve(argv[0], argv, environ) < 0) {
             printf("%s: Command not found.\n", argv[0]);
-            exit(0); // terminate child process
+            exit(1); // terminate child process
         }
     }
 
@@ -294,9 +293,13 @@ void do_bgfg(char **argv) {
 /*
  * waitfg - Block until process pid is no longer the foreground process
  */
-void waitfg(pid_t pid)
-{
-    return;
+void waitfg(pid_t pid) {
+    // according to the book, I would be better off using sigsuspend,
+    // but for some reason it doesn't work;
+    // this is a correct solution but it is potentially wasteful
+    struct job_t *job_ptr = getjobpid(jobs, pid);
+    while (job_ptr->state == FG)
+        sleep(1);
 }
 
 /*****************
@@ -310,19 +313,38 @@ void waitfg(pid_t pid)
  *     available zombie children, but doesn't wait for any other
  *     currently running children to terminate.
  */
-void sigchld_handler(int sig)
-{
-    return;
+void sigchld_handler(int sig) {
+    if (verbose)
+        write(1, "SIGCHLD Received!", 17);
+
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+        struct job_t *p_job = getjobpid(jobs, pid);
+
+        if (WIFEXITED(status)) {
+            deletejob(jobs, pid);
+        } else if (WIFSIGNALED(status)) {
+            printf("Job [%d] (%d) terminated by signal %d\n", p_job->jid, p_job->pid, WTERMSIG(status));
+            deletejob(jobs, pid);
+        }
+    }
+
+    if (errno == ECHILD)
+        return;
 }
 
 /*
  * sigint_handler - The kernel sends a SIGINT to the shell whenver the
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.
+ *    This function assumes that there is at most one fg job
+ *
  */
-void sigint_handler(int sig)
-{
-    return;
+void sigint_handler(int sig) {
+    pid_t pid = fgpid(jobs);
+    if (!pid) return;
+    Kill(-pid, SIGINT);
 }
 
 /*
