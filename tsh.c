@@ -318,7 +318,6 @@ void do_bgfg(char **argv) {
         printf("[%d] (%d) %s", job_ptr->jid, job_ptr->pid, job_ptr->cmdline);
     } else {
         job_ptr->state = FG;
-        printf("Resuming [%d] (%d) %s", job_ptr->jid, job_ptr->pid, job_ptr->cmdline);
         waitfg(job_ptr->pid);
     }
 }
@@ -353,13 +352,16 @@ void sigchld_handler(int sig) {
     int status;
     pid_t pid;
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
-        struct job_t *p_job = getjobpid(jobs, pid);
+        struct job_t *job_ptr = getjobpid(jobs, pid);
 
         if (WIFEXITED(status)) {
             deletejob(jobs, pid);
         } else if (WIFSIGNALED(status)) {
-            printf("Job [%d] (%d) terminated by signal %d\n", p_job->jid, p_job->pid, WTERMSIG(status));
+            printf("Job [%d] (%d) terminated by signal %d\n", job_ptr->jid, job_ptr->pid, WTERMSIG(status));
             deletejob(jobs, pid);
+        } else if (WIFSTOPPED(status)) {
+            printf("Job [%d] (%d) stopped by signal %d\n", job_ptr->jid, job_ptr->pid, WSTOPSIG(status));
+            job_ptr->state = ST;
         }
     }
 
