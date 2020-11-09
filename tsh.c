@@ -287,7 +287,40 @@ int builtin_cmd(char **argv)
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char **argv) {
-    return;
+    // argv[0] should contain the command,
+    // argv[1] should contain the job no.
+    if (argv[1] == NULL) {
+        printf("%s requires an argument!\n", argv[0]);
+        return;
+    }
+
+    struct job_t *job_ptr;
+    if (argv[1][0] == '%') {
+        // get job by jid
+        int jid = atoi(argv[1] + 1);
+        job_ptr = getjobjid(jobs, jid);
+    } else {
+        // get job by pid
+        int pid = atoi(argv[1]);
+        job_ptr = getjobpid(jobs, pid);
+    }
+
+    if (job_ptr == NULL) {
+        printf("No such process!\n");
+        return;
+    }
+
+    if (job_ptr->state == ST)
+        Kill(-job_ptr->pid, SIGCONT);
+
+    if (!strcmp(argv[0], "bg")) {
+        job_ptr->state = BG;
+        printf("[%d] (%d) %s", job_ptr->jid, job_ptr->pid, job_ptr->cmdline);
+    } else {
+        job_ptr->state = FG;
+        printf("Resuming [%d] (%d) %s", job_ptr->jid, job_ptr->pid, job_ptr->cmdline);
+        waitfg(job_ptr->pid);
+    }
 }
 
 /*
@@ -352,9 +385,10 @@ void sigint_handler(int sig) {
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.
  */
-void sigtstp_handler(int sig)
-{
-    return;
+void sigtstp_handler(int sig) {
+    pid_t pid = fgpid(jobs);
+    if (!pid) return;
+    Kill(-pid, SIGTSTP);
 }
 
 /*********************
