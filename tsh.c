@@ -88,6 +88,7 @@ pid_t Fork(void);
 void Kill(pid_t pid, int sig);
 void Setpgid(pid_t pid, pid_t pgid);
 void Write(int fd, const char* buf, size_t nbyte);
+int is_numeric(const char* str);
 
 /*
  * main - The shell's main routine
@@ -187,7 +188,7 @@ void eval(char *cmdline) {
     if (pid == 0) { // child process
         Setpgid(0, 0);          // we don't want child process to have the same pgid as shell
         if (execve(argv[0], argv, environ) < 0) {
-            printf("%s: Command not found.\n", argv[0]);
+            printf("%s: Command not found\n", argv[0]);
             exit(1); // terminate child process
         }
     }
@@ -290,19 +291,38 @@ void do_bgfg(char **argv) {
     // argv[0] should contain the command,
     // argv[1] should contain the job no.
     if (argv[1] == NULL) {
-        printf("%s requires an argument!\n", argv[0]);
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
         return;
     }
 
     struct job_t *job_ptr;
     if (argv[1][0] == '%') {
         // get job by jid
+        if (!is_numeric(argv[1] + 1)) {
+            printf("fg: argument must be a PID or %%jobid\n");
+            return;
+        }
+
         int jid = atoi(argv[1] + 1);
         job_ptr = getjobjid(jobs, jid);
+
+        if (job_ptr == NULL) {
+            printf("%%%d: No such job\n", jid);
+            return;
+        }
     } else {
         // get job by pid
+        if (!is_numeric(argv[1])) {
+            printf("bg: argument must be a PID or %%jobid\n");
+            return;
+        }
         int pid = atoi(argv[1]);
         job_ptr = getjobpid(jobs, pid);
+
+        if (job_ptr == NULL) {
+            printf("(%d): No such process\n", pid);
+            return;
+        }
     }
 
     if (job_ptr == NULL) {
@@ -657,4 +677,12 @@ void Write(int fd, const char* buf, size_t nbyte) {
     }
 
     return;
+}
+
+int is_numeric(const char* str) {
+    for (int i = 0; i < strlen(str); i++)
+        if (!('0' <= str[i] && str[i] <= '9'))
+            return 0;
+
+    return 1;
 }
