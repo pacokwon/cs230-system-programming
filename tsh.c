@@ -297,7 +297,7 @@ void do_bgfg(char **argv) {
 
     struct job_t *job_ptr;
     if (argv[1][0] == '%') {
-        // get job by jid
+        // get job by jid and initialize job_ptr
         if (!is_numeric(argv[1] + 1)) {
             printf("%s: argument must be a PID or %%jobid\n", argv[0]);
             return;
@@ -311,7 +311,7 @@ void do_bgfg(char **argv) {
             return;
         }
     } else {
-        // get job by pid
+        // get job by pid and initialize job_ptr
         if (!is_numeric(argv[1])) {
             printf("%s: argument must be a PID or %%jobid\n", argv[0]);
             return;
@@ -330,15 +330,17 @@ void do_bgfg(char **argv) {
         return;
     }
 
-    if (job_ptr->state == ST)
+    if (job_ptr->state == ST) // continue process by sending signal
         Kill(-job_ptr->pid, SIGCONT);
 
     if (!strcmp(argv[0], "bg")) {
+        // bg command
         job_ptr->state = BG;
         printf("[%d] (%d) %s", job_ptr->jid, job_ptr->pid, job_ptr->cmdline);
     } else {
+        // fg command
         job_ptr->state = FG;
-        waitfg(job_ptr->pid);
+        waitfg(job_ptr->pid); // wait for process to terminate
     }
 }
 
@@ -367,19 +369,19 @@ void waitfg(pid_t pid) {
  */
 void sigchld_handler(int sig) {
     if (verbose)
-        write(1, "SIGCHLD Received!", 17);
+        Write(1, "SIGCHLD Received!", 17);
 
     int status;
     pid_t pid;
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         struct job_t *job_ptr = getjobpid(jobs, pid);
 
-        if (WIFEXITED(status)) {
+        if (WIFEXITED(status)) {            // child process is terminated normally
             deletejob(jobs, pid);
-        } else if (WIFSIGNALED(status)) {
+        } else if (WIFSIGNALED(status)) {   // child process is terminated due to signal
             printf("Job [%d] (%d) terminated by signal %d\n", job_ptr->jid, job_ptr->pid, WTERMSIG(status));
             deletejob(jobs, pid);
-        } else if (WIFSTOPPED(status)) {
+        } else if (WIFSTOPPED(status)) {    // child process is stopped
             printf("Job [%d] (%d) stopped by signal %d\n", job_ptr->jid, job_ptr->pid, WSTOPSIG(status));
             job_ptr->state = ST;
         }
@@ -399,7 +401,7 @@ void sigchld_handler(int sig) {
 void sigint_handler(int sig) {
     pid_t pid = fgpid(jobs);
     if (!pid) return;
-    Kill(-pid, SIGINT);
+    Kill(-pid, SIGINT); // send SIGINT to process group
 }
 
 /*
@@ -410,7 +412,7 @@ void sigint_handler(int sig) {
 void sigtstp_handler(int sig) {
     pid_t pid = fgpid(jobs);
     if (!pid) return;
-    Kill(-pid, SIGTSTP);
+    Kill(-pid, SIGTSTP); // send SIGTSTP to process group
 }
 
 /*********************
