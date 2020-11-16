@@ -299,7 +299,7 @@ void do_bgfg(char **argv) {
     if (argv[1][0] == '%') {
         // get job by jid
         if (!is_numeric(argv[1] + 1)) {
-            printf("fg: argument must be a PID or %%jobid\n");
+            printf("%s: argument must be a PID or %%jobid\n", argv[0]);
             return;
         }
 
@@ -313,7 +313,7 @@ void do_bgfg(char **argv) {
     } else {
         // get job by pid
         if (!is_numeric(argv[1])) {
-            printf("bg: argument must be a PID or %%jobid\n");
+            printf("%s: argument must be a PID or %%jobid\n", argv[0]);
             return;
         }
         int pid = atoi(argv[1]);
