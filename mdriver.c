@@ -132,6 +132,8 @@ static void unix_error(char *msg);
 static void malloc_error(int tracenum, int opnum, char *msg);
 static void app_error(char *msg);
 
+extern void mm_check();
+
 /**************
  * Main routine
  **************/
@@ -221,7 +223,7 @@ int main(int argc, char **argv)
             unix_error("libc_stats calloc in main failed");
 
         /* Evaluate the libc malloc package using the K-best scheme */
-        for (i=0; i < num_tracefiles; i++) {
+        for (i = 0; i < num_tracefiles; i++) {
             trace = read_trace(tracedir, tracefiles[i]);
             libc_stats[i].ops = trace->num_ops;
             if (verbose > 1)
@@ -258,8 +260,9 @@ int main(int argc, char **argv)
     mem_init();
 
     /* Evaluate student's mm malloc package using the K-best scheme */
-    for (i=0; i < num_tracefiles; i++) {
+    for (i = 0; i < num_tracefiles; i++) {
         trace = read_trace(tracedir, tracefiles[i]);
+        printf("tracefile: %s\n", tracefiles[i]);
         mm_stats[i].ops = trace->num_ops;
         if (verbose > 1)
             printf("Checking mm_malloc for correctness, ");
@@ -572,7 +575,7 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
         switch (trace->ops[i].type) {
 
             case ALLOC: /* mm_malloc */
-
+                printf("%5d\tALLOC\n", i);
                 /* Call the student's malloc */
                 if ((p = mm_malloc(size)) == NULL) {
                     malloc_error(tracenum, i, "mm_malloc failed.");
@@ -587,6 +590,7 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                 if (add_range(ranges, p, size, tracenum, i) == 0)
                     return 0;
 
+
                 /* ADDED: cgw
                  * fill range with low byte of index.  This will be used later
                  * if we realloc the block and wish to make sure that the old
@@ -594,13 +598,15 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                  */
                 memset(p, index & 0xFF, size);
 
+
                 /* Remember region */
                 trace->blocks[index] = p;
                 trace->block_sizes[index] = size;
+
                 break;
 
             case REALLOC: /* mm_realloc */
-
+                printf("REALLOC\n");
                 /* Call the student's realloc */
                 oldp = trace->blocks[index];
                 if ((newp = mm_realloc(oldp, size)) == NULL) {
@@ -637,7 +643,7 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case FREE: /* mm_free */
-
+                printf("FREE\n");
                 /* Remove region from list and call student's free function */
                 p = trace->blocks[index];
                 remove_range(ranges, p);
