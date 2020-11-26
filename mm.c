@@ -64,6 +64,7 @@
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 extern int verbose;
+extern int heap_check_flag;
 
 char *heap_listp;
 char *free_head;     // pointer to bp of first node
@@ -80,7 +81,6 @@ static int heap_check();
 static int heap_check_free();
 static int heap_check_cross_free();
 static int heap_check_overlap();
-static int heap_check_valid();
 void mm_check();
 
 /*
@@ -143,7 +143,7 @@ void *mm_malloc(size_t size) {
     if (verbose > 1)
         mm_check();
 
-    if (verbose)
+    if (heap_check_flag)
         if (heap_check() && verbose)
             printf("Heap compromised!\n");
 
@@ -166,13 +166,15 @@ void mm_free(void *bp) {
     if (verbose > 1)
         mm_check();
 
-    if (verbose)
+    if (heap_check_flag)
         if (heap_check() && verbose)
             printf("Heap compromised!\n");
 }
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ *
+ * TODO: improve performance by attempting in-place realloc
  */
 void *mm_realloc(void *ptr, size_t size) {
     void *oldptr = ptr;
@@ -192,7 +194,7 @@ void *mm_realloc(void *ptr, size_t size) {
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
 
-    if (verbose)
+    if (heap_check_flag)
         if (heap_check() && verbose)
             printf("Heap compromised!\n");
 
