@@ -67,6 +67,7 @@ extern int verbose;
 
 char *heap_listp;
 char *free_head;     // pointer to bp of first node
+char *epilogue;     // pointer to bp of first node
 
 static void *coalesce(void *bp);
 static void *extend_heap(size_t words);
@@ -74,6 +75,12 @@ static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 static void insert_first(void* bp);
 static void remove_node(void *bp);
+
+static int heap_check();
+static int heap_check_free();
+static int heap_check_cross_free();
+static int heap_check_overlap();
+static int heap_check_valid();
 void mm_check();
 
 /*
@@ -90,6 +97,7 @@ int mm_init(void) {
     PUT(heap_listp + 4 * WSIZE, PACK(4 * WSIZE, 1));
     PUT(heap_listp + 5 * WSIZE, PACK(0, 1));
 
+    epilogue = heap_listp + 5 * WSIZE;
     heap_listp += (2 * WSIZE);
     free_head = heap_listp;
 
@@ -108,6 +116,7 @@ int mm_init(void) {
 void *mm_malloc(size_t size) {
     if (verbose)
         printf("Entering mm_malloc\n");
+
     size_t newsize, extendsize;
     char *bp;
 
@@ -133,6 +142,11 @@ void *mm_malloc(size_t size) {
     place(bp, newsize);
     if (verbose > 1)
         mm_check();
+
+    if (verbose)
+        if (heap_check() && verbose)
+            printf("Heap compromised!\n");
+
     return bp;
 }
 
@@ -142,6 +156,7 @@ void *mm_malloc(size_t size) {
 void mm_free(void *bp) {
     if (verbose)
         printf("Entering mm_free\n");
+
     size_t size = GET_SIZE(HDRP(bp));
 
     PUT(HDRP(bp), PACK(size, 0));
@@ -150,6 +165,10 @@ void mm_free(void *bp) {
 
     if (verbose > 1)
         mm_check();
+
+    if (verbose)
+        if (heap_check() && verbose)
+            printf("Heap compromised!\n");
 }
 
 /*
@@ -169,10 +188,16 @@ void *mm_realloc(void *ptr, size_t size) {
 
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
+
+    if (verbose)
+        if (heap_check() && verbose)
+            printf("Heap compromised!\n");
+
     return newptr;
 }
 
 static void *coalesce(void *bp) {
+
     if (verbose)
         printf("Entering coalesce\n");
 
@@ -181,11 +206,14 @@ static void *coalesce(void *bp) {
     size_t size = GET_SIZE(HDRP(bp));
 
     if (verbose)
-        printf("prev: %lu\tnext: %lu\n", prev_alloc, next_alloc);
+        printf("prev: %lu\tnext: %lu\tsize: %lu\taddr: %p\n", prev_alloc, next_alloc, size, bp);
 
     if (prev_alloc && next_alloc) {
         // do nothing
     } else if (prev_alloc && !next_alloc) {
+        if (verbose)
+            printf("Next block size: %u\taddr: %p\n", GET_SIZE(HDRP(NEXT_BLKP(bp))), NEXT_BLKP(bp));
+
         // next one is free
         remove_node(NEXT_BLKP(bp));
 
@@ -193,6 +221,8 @@ static void *coalesce(void *bp) {
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
     } else if (!prev_alloc && next_alloc) {
+        if (verbose)
+            printf("Prev block size: %u\taddr: %p\n", GET_SIZE(HDRP(PREV_BLKP(bp))), PREV_BLKP(bp));
         // prev one is free
         remove_node(PREV_BLKP(bp));
 
@@ -202,24 +232,34 @@ static void *coalesce(void *bp) {
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
     } else {
+        if (verbose) {
+            printf("Prev block size: %u\taddr: %p\n", GET_SIZE(HDRP(PREV_BLKP(bp))), PREV_BLKP(bp));
+            printf("Next block size: %u\taddr: %p\n", GET_SIZE(HDRP(NEXT_BLKP(bp))), NEXT_BLKP(bp));
+        }
+
         // both sides are free
         remove_node(PREV_BLKP(bp));
         remove_node(NEXT_BLKP(bp));
 
         size += GET_SIZE(HDRP(NEXT_BLKP(bp))) + GET_SIZE(HDRP(PREV_BLKP(bp)));
+
         bp = PREV_BLKP(bp);
 
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        PUT(HDRP(bp), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0));
     }
 
     insert_first(bp);
+
+    if (verbose)
+        printf("After coalesce - size: %u\taddr: %p\n", GET_SIZE(HDRP(bp)), bp);
+
     return bp;
 }
 
 static void *extend_heap(size_t words) {
     if (verbose)
-        printf("\nEntering extend_heap\n");
+        printf("Entering extend_heap\n");
 
     char *bp;
     size_t size;
@@ -238,6 +278,7 @@ static void *extend_heap(size_t words) {
 
     /* new epilogue block */
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
+    epilogue = NEXT_BLKP(bp);
 
     return coalesce(bp);
 }
@@ -348,4 +389,125 @@ void mm_check() {
         count += 1;
     }
     printf("-------------------------------\n");
+}
+
+static int heap_check() {
+    if (verbose)
+        printf("Entering heap_check()\n");
+
+    if (heap_check_free()) {
+        if (verbose)
+            printf("-- Free block test failed!\n");
+
+        verbose = 0;
+        return 1;
+    }
+
+    if (heap_check_cross_free()) {
+        if (verbose)
+            printf("-- Free block cross check failed!\n");
+
+        verbose = 0;
+        return 1;
+    }
+
+    if (heap_check_overlap()) {
+        if (verbose)
+            printf("-- Overlap check failed!\n");
+
+        verbose = 0;
+        return 1;
+    }
+
+    return 0;
+}
+
+/* - Is every block in the free list marked as free? */
+/* - Are there any contiguous free blocks that somehow escaped coalescing? */
+/* - Do the pointers in the free list point to valid free blocks? */
+static int heap_check_free() {
+    char* iter = GET_NEXTP(free_head);
+
+    while (iter != NULL) {
+        if (GET_ALLOC(HDRP(iter)) || GET_ALLOC(FTRP(iter))) {
+            if (verbose)
+                printf("\tAllocated bit is set in free block!\n");
+            return 1;
+        }
+
+        char* next = NEXT_BLKP(iter);
+        if (next != NULL && !GET_ALLOC(HDRP(next))) {
+            if (verbose)
+                printf("\tNext adjacent block is also free!\n");
+            return 1;
+        }
+
+        char* prev = PREV_BLKP(iter);
+        if (prev != NULL && !GET_ALLOC(HDRP(prev))) {
+            if (verbose)
+                printf("\tPrev adjacent block is also free!\n");
+            return 1;
+        }
+
+        iter = GET_NEXTP(iter);
+    }
+
+    return 0;
+}
+
+/* - Is every free block actually in the free list? */
+static int heap_check_cross_free() {
+    char *block_iter = NEXT_BLKP(heap_listp);
+
+    while (block_iter < epilogue) {
+        if (GET_ALLOC(HDRP(block_iter))) {
+            block_iter = NEXT_BLKP(block_iter);
+            continue;
+        }
+
+        // block_iter points to a free block
+        char *free_iter = GET_NEXTP(free_head);
+
+        // check if block_iter overlaps with free_iter
+        int exists = 0;
+        while (free_iter != NULL) {
+            if (block_iter == free_iter) {
+                exists = 1;
+                break;
+            }
+
+            free_iter = GET_NEXTP(free_iter);
+        }
+
+        if (!exists) {
+            if (verbose)
+                printf("\tFree block does not exist in linked list!\n");
+            return 1;
+        }
+
+        block_iter = NEXT_BLKP(block_iter);
+    }
+
+    return 0;
+}
+
+/* - Do any allocated blocks overlap? */
+static int heap_check_overlap() {
+    char *iter = NEXT_BLKP(heap_listp);
+
+    while (GET_SIZE(HDRP(iter)) > 0) {
+        if (!GET_ALLOC(HDRP(iter))) {
+            iter = NEXT_BLKP(iter);
+            continue;
+        }
+
+        size_t size = GET_SIZE(HDRP(iter));
+        char* next = NEXT_BLKP(iter);
+        if (iter + size != next)
+            return 1;
+
+        iter = next;
+    }
+
+    return 0;
 }
