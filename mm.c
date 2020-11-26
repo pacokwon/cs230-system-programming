@@ -182,7 +182,10 @@ void *mm_realloc(void *ptr, size_t size) {
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+
+    copySize = GET_SIZE(HDRP((char*)oldptr));
+
+    /* realloc request size is smaller than originally allocated */
     if (size < copySize)
         copySize = size;
 
