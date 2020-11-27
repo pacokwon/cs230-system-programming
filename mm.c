@@ -67,7 +67,7 @@ extern int verbose;
 extern int heap_check_flag;
 
 char *heap_listp;
-char *free_head;     // pointer to bp of first node
+char *free_head;    // pointer to bp of first node
 char *epilogue;     // pointer to bp of first node
 
 static void *coalesce(void *bp);
@@ -87,19 +87,17 @@ void mm_check();
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
-    if ((heap_listp = mem_sbrk(6 * WSIZE)) == (void*)-1)
+    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void*)-1)
         return -1;
 
     PUT(heap_listp, 0);
-    PUT(heap_listp + 1 * WSIZE, PACK(4 * WSIZE, 1));
-    PUTP(heap_listp + 2 * WSIZE, NULL); // dummy node next
-    PUTP(heap_listp + 3 * WSIZE, NULL); // dummy node prev
-    PUT(heap_listp + 4 * WSIZE, PACK(4 * WSIZE, 1));
-    PUT(heap_listp + 5 * WSIZE, PACK(0, 1));
+    PUT(heap_listp + 1 * WSIZE, PACK(2 * WSIZE, 1));
+    PUT(heap_listp + 2 * WSIZE, PACK(2 * WSIZE, 1));
+    PUT(heap_listp + 3 * WSIZE, PACK(0, 1));
 
-    epilogue = heap_listp + 5 * WSIZE;
+    epilogue = heap_listp + 3 * WSIZE;
     heap_listp += (2 * WSIZE);
-    free_head = heap_listp;
+    free_head = NULL;
 
     char *bp;
     /* Allocate CHUNKSIZE bytes ahead of time */
@@ -115,7 +113,7 @@ int mm_init(void) {
  */
 void *mm_malloc(size_t size) {
     if (verbose)
-        printf("Entering mm_malloc\n");
+        printf("Entering mm_malloc()\n");
 
     size_t newsize, extendsize;
     char *bp;
@@ -155,7 +153,7 @@ void *mm_malloc(size_t size) {
  */
 void mm_free(void *bp) {
     if (verbose)
-        printf("Entering mm_free\n");
+        printf("Entering mm_free()\n");
 
     size_t size = GET_SIZE(HDRP(bp));
 
@@ -204,7 +202,7 @@ void *mm_realloc(void *ptr, size_t size) {
 static void *coalesce(void *bp) {
 
     if (verbose)
-        printf("Entering coalesce\n");
+        printf("Entering coalesce()\n");
 
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
@@ -228,6 +226,7 @@ static void *coalesce(void *bp) {
     } else if (!prev_alloc && next_alloc) {
         if (verbose)
             printf("Prev block size: %u\taddr: %p\n", GET_SIZE(HDRP(PREV_BLKP(bp))), PREV_BLKP(bp));
+
         // prev one is free
         remove_node(PREV_BLKP(bp));
 
@@ -264,7 +263,7 @@ static void *coalesce(void *bp) {
 
 static void *extend_heap(size_t words) {
     if (verbose)
-        printf("Entering extend_heap\n");
+        printf("Entering extend_heap()\n");
 
     char *bp;
     size_t size;
@@ -290,27 +289,36 @@ static void *extend_heap(size_t words) {
 
 
 static void *find_fit(size_t asize) {
+    if (verbose)
+        printf("Entering find_fit()\n");
+
     void *bp = free_head;
 
     while (bp != NULL) {
         /* bp is not allocated and free space is enough */
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            if (verbose)
+                printf("Fit found at %p\n", bp);
+
             return bp;
+        }
 
         bp = GET_NEXTP(bp);
     }
+
+
+    if (verbose)
+        printf("Fit not found. exiting find_fit()\n");
 
     return NULL;
 }
 
 static void place(void *bp, size_t asize) {
+    if (verbose)
+        printf("Entering place()\n");
+
     /* prohibit prologue block access */
-    if (bp == free_head)
-        return;
-
-    char* prev_pp = GET_PREVP(bp);
-    char* prev_bp = ADJ_NEXTP(prev_pp);
-
+    char* prev_pp = GET_PREVP(bp); // might be null
     char* next_bp = GET_NEXTP(bp); // might be null
 
     size_t csize = GET_SIZE(HDRP(bp));
@@ -323,7 +331,11 @@ static void place(void *bp, size_t asize) {
         PUT(FTRP(bp), PACK(csize - asize, 0));
 
         /* modify four connections */
-        PUTP(prev_bp, bp);
+        if (prev_pp == NULL)
+            /* bp is the first element in linked list */
+            free_head = bp;
+        else
+            PUTP(ADJ_NEXTP(prev_pp), bp);
         PUTP(ADJ_PREVP(bp), prev_pp);
         PUTP(bp, next_bp);
         if (next_bp != NULL)
@@ -333,7 +345,11 @@ static void place(void *bp, size_t asize) {
         PUT(FTRP(bp), PACK(csize, 1));
 
         /* modify two connections */
-        PUTP(prev_bp, next_bp);
+        if (prev_pp == NULL)
+            free_head = next_bp;
+        else
+            PUTP(ADJ_NEXTP(prev_pp), next_bp);
+
         if (next_bp != NULL)
             PUTP(ADJ_PREVP(next_bp), prev_pp);
     }
@@ -343,30 +359,51 @@ static void insert_first(void* bp) {
     char* cur_np = bp;
     char* cur_pp = ADJ_PREVP(bp);
 
-    PUTP(cur_np, GET_NEXTP(free_head));
-    if (GET_NEXTP(free_head) != NULL)
-        PUTP(ADJ_PREVP(GET_NEXTP(free_head)), cur_pp);
-    PUTP(free_head, cur_np);
-    PUTP(cur_pp, ADJ_PREVP(free_head));
+    if (free_head == NULL) { // no element in linked list
+        /* modify only two links */
+        free_head = cur_np; // point to bp as first element
+        PUTP(cur_np, NULL);
+        PUTP(cur_pp, NULL);
+    } else { // at least a single element exists
+        /* modify four links */
+        PUTP(cur_np, free_head);            // current next -> first element's next
+        PUTP(ADJ_PREVP(free_head), cur_pp); // first element's prev -> current prev
+        free_head = cur_np;                 // update head to current element
+        PUTP(cur_pp, NULL);                 // put NULL at current prev
+    }
+
 }
 
+/*
+ * remove_node - safely remove node at address `bp` from linked list
+ *      safely removing means linking previous and next nodes(if any)
+ *      so that the linked list would remain valid
+ */
 static void remove_node(void *bp) {
     if (verbose)
-        printf("Entering remove_node\n");
+        printf("Entering remove_node()\n");
 
-    /* prohibit prologue block access */
-    if (bp == free_head)
-        return;
+    char* prev_pp = GET_PREVP(bp);
+    char* next_bp = GET_NEXTP(bp);
 
-    char* prev_pp = GET_PREVP(bp);  // guaranteed to be not null
-    char* prev_bp = ADJ_NEXTP(prev_pp);
-    char* next_bp = GET_NEXTP(bp);  // might be null
-
-    /* modify two connections */
-    PUTP(prev_bp, next_bp);
-    /* if bp is not last node */
-    if (next_bp != NULL)
-        PUTP(ADJ_PREVP(next_bp), prev_pp);
+    /* case 0: bp is only element */
+    if (prev_pp == NULL && next_bp == NULL) {
+        free_head = NULL;
+    }
+    /* case 1: bp is first element */
+    else if (prev_pp == NULL) {
+        PUTP(ADJ_PREVP(next_bp), NULL); // set next's pp to NULL
+        free_head = next_bp;
+    }
+    /* case 2: bp is last element */
+    else if (next_bp == NULL) {
+        PUTP(ADJ_NEXTP(prev_pp), NULL); // set prev's bp to NULL
+    }
+    /* case 3: bp is in between */
+    else {
+        PUTP(ADJ_NEXTP(prev_pp), next_bp); // link prev's bp to next's bp
+        PUTP(ADJ_PREVP(next_bp), prev_pp); // link next's pp to prev's pp
+    }
 }
 
 void mm_check() {
@@ -383,7 +420,7 @@ void mm_check() {
     printf("-------------------------------\n");
 
     printf("----- Iterating free list -----\n");
-    char* ptr = GET_NEXTP(free_head);
+    char* ptr = free_head;
 
     printf("ptr: %p\n", ptr);
     count = 1;
@@ -431,7 +468,7 @@ static int heap_check() {
 /* - Are there any contiguous free blocks that somehow escaped coalescing? */
 /* - Do the pointers in the free list point to valid free blocks? */
 static int heap_check_free() {
-    char* iter = GET_NEXTP(free_head);
+    char* iter = free_head;
 
     while (iter != NULL) {
         if (GET_ALLOC(HDRP(iter)) || GET_ALLOC(FTRP(iter))) {
@@ -471,7 +508,7 @@ static int heap_check_cross_free() {
         }
 
         // block_iter points to a free block
-        char *free_iter = GET_NEXTP(free_head);
+        char *free_iter = free_head;
 
         // check if block_iter overlaps with free_iter
         int exists = 0;
