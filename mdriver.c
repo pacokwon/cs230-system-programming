@@ -272,6 +272,9 @@ int main(int argc, char **argv)
             printf("Checking mm_malloc for correctness, \n");
         mm_stats[i].valid = eval_mm_valid(trace, i, &ranges);
         if (mm_stats[i].valid) {
+            if (verbose)
+                printf("Valid!\n");
+
             if (verbose > 1)
                 printf("efficiency, ");
             mm_stats[i].util = eval_mm_util(trace, i, &ranges);
@@ -697,6 +700,8 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
         switch (trace->ops[i].type) {
 
             case ALLOC: /* mm_alloc */
+                if (verbose)
+                    printf("\n%5d\tALLOC\n", i);
                 index = trace->ops[i].index;
                 size = trace->ops[i].size;
 
@@ -717,6 +722,8 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case REALLOC: /* mm_realloc */
+                if (verbose)
+                    printf("\n%5d\tREALLOC\n", i);
                 index = trace->ops[i].index;
                 newsize = trace->ops[i].size;
                 oldsize = trace->block_sizes[index];
@@ -739,6 +746,8 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case FREE: /* mm_free */
+                if (verbose)
+                    printf("\n%5d\tFREE\n", i);
                 index = trace->ops[i].index;
                 size = trace->block_sizes[index];
                 p = trace->blocks[index];
