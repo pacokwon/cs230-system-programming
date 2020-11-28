@@ -63,11 +63,26 @@
 /* get prev block */
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+/* number of `size classes` */
+#define SIZE_CLASS_SIZE 9
+
 extern int verbose;
 extern int heap_check_flag;
 
 char *heap_listp;
+
+/*
+Segregated Free List:
+Since minimum payload size is 16, size classes will look like:
+    {16 ~ 31}, {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
+This is 9 entries, so we'll keep an array of pointers of size 9.
+*/
+
+/* array of char pointers */
+char *heads[SIZE_CLASS_SIZE];
+
 char *free_head;    // pointer to bp of first node
+
 char *epilogue;     // pointer to bp of first node
 
 static void *coalesce(void *bp);
@@ -81,6 +96,8 @@ static int heap_check();
 static int heap_check_free();
 static int heap_check_cross_free();
 static int heap_check_overlap();
+
+static size_t get_size_class();
 void mm_check();
 
 /*
@@ -97,7 +114,9 @@ int mm_init(void) {
 
     epilogue = heap_listp + 3 * WSIZE;
     heap_listp += (2 * WSIZE);
-    free_head = NULL;
+
+    for (size_t i = 0; i < SIZE_CLASS_SIZE; i++)
+        heads[i] = NULL;
 
     char *bp;
     /* Allocate CHUNKSIZE bytes ahead of time */
@@ -122,9 +141,9 @@ void *mm_malloc(size_t size) {
         return NULL;
 
     if (size <= DSIZE)
-        newsize = 2 * DSIZE;    // header, footer, and minimum payload
+        newsize = DSIZE + DSIZE;            // header + footer -> DSIZE. minimum payload -> DSIZE
     else
-        newsize = 2 * WSIZE + ALIGN(size);
+        newsize = DSIZE + ALIGN(size);      // header + footer -> DSIZE. aligned payload -> N * DSIZE
 
     if ((bp = find_fit(newsize)) != NULL) {
         place(bp, newsize);
@@ -292,13 +311,31 @@ static void *find_fit(size_t asize) {
     if (verbose)
         printf("Entering find_fit()\n");
 
-    void *bp = free_head;
+    /* lower bound of size class. starts from 16 (inclusive) */
+    size_t lower_bound = 16;
+
+    size_t size_class_index = 0;
+    while (
+        size_class_index < SIZE_CLASS_SIZE &&
+        !(lower_bound <= asize && asize < (lower_bound * 2))
+    ) {
+        size_class_index += 1;
+        lower_bound *= 2;
+    }
+
+    if (size_class_index == SIZE_CLASS_SIZE)
+        size_class_index -= 1;
+
+    /* now, size_class_index stores the index to the size class in `heads`  */
+    /*  and lower_bound stores the lower bound of the size class(inclusive) */
+
+    /* here, we inspect the linked list at `size_class_index` in `heads` */
+    void *bp = heads[size_class_index];
 
     while (bp != NULL) {
-        /* bp is not allocated and free space is enough */
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
             if (verbose)
-                printf("Fit found at %p\n", bp);
+                printf("Fit found at appropriate size class %lu.\n", size_class_index);
 
             return bp;
         }
@@ -306,13 +343,57 @@ static void *find_fit(size_t asize) {
         bp = GET_NEXTP(bp);
     }
 
+    /* no fitting size at the size class. this can either be because the */
+    /* linked list is empty, or there really is no fitting free block    */
 
-    if (verbose)
-        printf("Fit not found. exiting find_fit()\n");
+    /* here, we inspect the larger size classes for finding a fitting free block */
+    for (size_t index = size_class_index + 1; index < SIZE_CLASS_SIZE; index++) {
+        bp = heads[index];
+
+        while (bp != NULL) {
+            if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+                if (verbose)
+                    printf("Fit found at size class %lu.\n", index);
+
+                return bp;
+            }
+
+            bp = GET_NEXTP(bp);
+        }
+
+        /* no fitting size found. move onto next size class */
+    }
+
+    /* at this point, there is no fitting block in any of the size classes */
+    /* above the appropriate size class. so there is no fitting block */
 
     return NULL;
+
+    /* void *bp = free_head; */
+
+    /* while (bp != NULL) { */
+    /*     /1* bp is not allocated and free space is enough *1/ */
+    /*     if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) { */
+    /*         if (verbose) */
+    /*             printf("Fit found at %p\n", bp); */
+
+    /*         return bp; */
+    /*     } */
+
+    /*     bp = GET_NEXTP(bp); */
+    /* } */
+
+
+    /* if (verbose) */
+    /*     printf("Fit not found. exiting find_fit()\n"); */
+
+    /* return NULL; */
 }
 
+/*
+ * place: attempt to allocate memory of size `asize`
+ *      in the free block at address `bp`
+ */
 static void place(void *bp, size_t asize) {
     if (verbose)
         printf("Entering place()\n");
@@ -322,62 +403,71 @@ static void place(void *bp, size_t asize) {
     char* next_bp = GET_NEXTP(bp); // might be null
 
     size_t csize = GET_SIZE(HDRP(bp));
-    if ((csize - asize) >= (2 * DSIZE)) {
+    size_t size_difference = csize - asize;
+    if (size_difference >= (2 * DSIZE)) {
+        /* first, remove the whole node at bp */
+        remove_node(bp);
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
 
+        /* now, we have a new free block of size `size_difference` @ address `bp` */
+        /* we must find the appropriate size class and insert this free block into that linked list */
+        /* TODO!! */
         bp = NEXT_BLKP(bp);
-        PUT(HDRP(bp), PACK(csize - asize, 0));
-        PUT(FTRP(bp), PACK(csize - asize, 0));
-
-        /* modify four connections */
-        if (prev_pp == NULL)
-            /* bp is the first element in linked list */
-            free_head = bp;
-        else
-            PUTP(ADJ_NEXTP(prev_pp), bp);
-        PUTP(ADJ_PREVP(bp), prev_pp);
-        PUTP(bp, next_bp);
-        if (next_bp != NULL)
-            PUTP(ADJ_PREVP(next_bp), ADJ_PREVP(bp));
+        PUT(HDRP(bp), PACK(size_difference, 0));
+        PUT(FTRP(bp), PACK(size_difference, 0));
+        insert_first(bp);
     } else {
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
 
-        /* modify two connections */
-        if (prev_pp == NULL)
-            free_head = next_bp;
-        else
-            PUTP(ADJ_NEXTP(prev_pp), next_bp);
+        /* remove the whole node at bp, as this whole block is allocated */
+        remove_node(bp);
 
-        if (next_bp != NULL)
-            PUTP(ADJ_PREVP(next_bp), prev_pp);
+/*         /1* modify two connections *1/ */
+/*         if (prev_pp == NULL) */
+/*             free_head = next_bp; */
+/*         else */
+/*             PUTP(ADJ_NEXTP(prev_pp), next_bp); */
+
+/*         if (next_bp != NULL) */
+/*             PUTP(ADJ_PREVP(next_bp), prev_pp); */
     }
 }
 
+/*
+ * insert_first - insert node at bp as first node of linked list of appropriate size class
+ *      NOTE: the block sizes must be specified at the header and footer,
+ *      as this function makes use of that to guess the size class
+ */
 static void insert_first(void* bp) {
+    if (verbose)
+        printf("Entering insert_first()\n");
+
     char* cur_np = bp;
     char* cur_pp = ADJ_PREVP(bp);
+    size_t size_class_index = get_size_class(GET_SIZE(HDRP(bp)));
 
-    if (free_head == NULL) { // no element in linked list
+    if (heads[size_class_index] == NULL) { // no element in linked list
         /* modify only two links */
-        free_head = cur_np; // point to bp as first element
+        heads[size_class_index] = cur_np; // point to bp as first element
         PUTP(cur_np, NULL);
         PUTP(cur_pp, NULL);
     } else { // at least a single element exists
         /* modify four links */
-        PUTP(cur_np, free_head);            // current next -> first element's next
-        PUTP(ADJ_PREVP(free_head), cur_pp); // first element's prev -> current prev
-        free_head = cur_np;                 // update head to current element
-        PUTP(cur_pp, NULL);                 // put NULL at current prev
+        PUTP(cur_np, heads[size_class_index]);              // current next -> first element's next
+        PUTP(ADJ_PREVP(heads[size_class_index]), cur_pp);   // first element's prev -> current prev
+        heads[size_class_index] = cur_np;                   // update head to current element
+        PUTP(cur_pp, NULL);                                 // put NULL at current prev
     }
-
 }
 
 /*
  * remove_node - safely remove node at address `bp` from linked list
- *      safely removing means linking previous and next nodes(if any)
+ *      "safely removing" means linking previous and next nodes(if any)
  *      so that the linked list would remain valid
+ *      NOTE: the block sizes must be specified at the header and footer,
+ *      as this function makes use of that to guess the size class
  */
 static void remove_node(void *bp) {
     if (verbose)
@@ -385,15 +475,16 @@ static void remove_node(void *bp) {
 
     char* prev_pp = GET_PREVP(bp);
     char* next_bp = GET_NEXTP(bp);
+    size_t size_class_index = get_size_class(GET_SIZE(HDRP(bp)));
 
     /* case 0: bp is only element */
     if (prev_pp == NULL && next_bp == NULL) {
-        free_head = NULL;
+        heads[size_class_index] = NULL;
     }
     /* case 1: bp is first element */
     else if (prev_pp == NULL) {
         PUTP(ADJ_PREVP(next_bp), NULL); // set next's pp to NULL
-        free_head = next_bp;
+        heads[size_class_index] = next_bp;
     }
     /* case 2: bp is last element */
     else if (next_bp == NULL) {
@@ -420,16 +511,20 @@ void mm_check() {
     printf("-------------------------------\n");
 
     printf("----- Iterating free list -----\n");
-    char* ptr = free_head;
 
-    printf("ptr: %p\n", ptr);
-    count = 1;
-    while (ptr != NULL) {
-        printf("Block number %03lu\n", count);
-        printf("\tSize:%8d\tAllocated:%4d\n", GET_SIZE(HDRP(ptr)), GET_ALLOC(HDRP(ptr)));
-        ptr = GET_NEXTP(ptr);
-        count += 1;
+    for (size_t i = 0; i < SIZE_CLASS_SIZE; i++) {
+        char* ptr = heads[i];
+
+        printf("ptr: %p\n", ptr);
+        count = 1;
+        while (ptr != NULL) {
+            printf("Block number %03lu\n", count);
+            printf("\tClass:%2lu\tSize:%8d\tAllocated:%4dNext: %p\n", i, GET_SIZE(HDRP(ptr)), GET_ALLOC(HDRP(ptr)), GET_NEXTP(ptr));
+            ptr = GET_NEXTP(ptr);
+            count += 1;
+        }
     }
+
     printf("-------------------------------\n");
 }
 
@@ -468,30 +563,32 @@ static int heap_check() {
 /* - Are there any contiguous free blocks that somehow escaped coalescing? */
 /* - Do the pointers in the free list point to valid free blocks? */
 static int heap_check_free() {
-    char* iter = free_head;
+    for (size_t i = 0; i < SIZE_CLASS_SIZE; i++) {
+        char* iter = heads[i];
 
-    while (iter != NULL) {
-        if (GET_ALLOC(HDRP(iter)) || GET_ALLOC(FTRP(iter))) {
-            if (verbose)
-                printf("\tAllocated bit is set in free block!\n");
-            return 1;
+        while (iter != NULL) {
+            if (GET_ALLOC(HDRP(iter)) || GET_ALLOC(FTRP(iter))) {
+                if (verbose)
+                    printf("\tAllocated bit is set in free block!\n");
+                return 1;
+            }
+
+            char* next = NEXT_BLKP(iter);
+            if (next != NULL && !GET_ALLOC(HDRP(next))) {
+                if (verbose)
+                    printf("\tNext adjacent block is also free!\n");
+                return 1;
+            }
+
+            char* prev = PREV_BLKP(iter);
+            if (prev != NULL && !GET_ALLOC(HDRP(prev))) {
+                if (verbose)
+                    printf("\tPrev adjacent block is also free!\n");
+                return 1;
+            }
+
+            iter = GET_NEXTP(iter);
         }
-
-        char* next = NEXT_BLKP(iter);
-        if (next != NULL && !GET_ALLOC(HDRP(next))) {
-            if (verbose)
-                printf("\tNext adjacent block is also free!\n");
-            return 1;
-        }
-
-        char* prev = PREV_BLKP(iter);
-        if (prev != NULL && !GET_ALLOC(HDRP(prev))) {
-            if (verbose)
-                printf("\tPrev adjacent block is also free!\n");
-            return 1;
-        }
-
-        iter = GET_NEXTP(iter);
     }
 
     return 0;
@@ -507,18 +604,26 @@ static int heap_check_cross_free() {
             continue;
         }
 
-        // block_iter points to a free block
-        char *free_iter = free_head;
-
-        // check if block_iter overlaps with free_iter
+        /* check for block_iter from segregated list */
         int exists = 0;
-        while (free_iter != NULL) {
-            if (block_iter == free_iter) {
-                exists = 1;
-                break;
+        for (size_t i = 0; i < SIZE_CLASS_SIZE; i++) {
+            /* check size class at index `i` */
+
+            // block_iter points to a free block
+            char *free_iter = heads[i];
+
+            // check if block_iter overlaps with free_iter
+            while (free_iter != NULL) {
+                if (block_iter == free_iter) {
+                    exists = 1;
+                    break;
+                }
+
+                free_iter = GET_NEXTP(free_iter);
             }
 
-            free_iter = GET_NEXTP(free_iter);
+            if (exists)
+                break;
         }
 
         if (!exists) {
@@ -552,4 +657,26 @@ static int heap_check_overlap() {
     }
 
     return 0;
+}
+
+/* get_size_class: get size class of given block size
+ *      this function returns the index of `heads`
+ *      that the size class would fit in
+ */
+static size_t get_size_class(size_t asize) {
+    size_t lower_bound = 16;
+    size_t index = 0;
+
+    while (
+        index < SIZE_CLASS_SIZE &&
+        !(lower_bound <= asize && asize < (lower_bound * 2))
+    ) {
+        lower_bound *= 2;
+        index += 1;
+    }
+
+    if (index == SIZE_CLASS_SIZE)
+        index -= 1;
+
+    return index;
 }
