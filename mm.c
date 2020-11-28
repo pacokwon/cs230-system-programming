@@ -18,15 +18,15 @@
 #include "mm.h"
 #include "memlib.h"
 
-/* single word (8) or double word (16) alignment */
-#define ALIGNMENT 16
+/* single word (4) or double word (8) alignment */
+#define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0xF)
+#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
-#define WSIZE       8           // word size (also header & footer size)
-#define DSIZE       16          // double word size
+#define WSIZE       4           // word size (also header & footer size)
+#define DSIZE       8          // double word size
 #define CHUNKSIZE   (1 << 6)   // bytes
 
 #define MAX(x, y)   ((x) > (y) ? (x) : (y))
@@ -64,7 +64,7 @@
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /* number of `size classes` */
-#define SIZE_CLASS_SIZE 8
+#define SIZE_CLASS_SIZE 20
 
 extern int verbose;
 extern int heap_check_flag;
@@ -73,8 +73,8 @@ char *heap_listp;
 
 /*
 Segregated Free List:
-Since minimum block size is 32, size classes will look like:
-    {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
+Since minimum block size is 16, size classes will look like:
+    {16 ~ 31} {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
 This is 8 entries, so we'll keep an array of pointers of size 8.
 */
 
@@ -537,7 +537,6 @@ static void place(void *bp, size_t asize) {
 
         /* now, we have a new free block of size `size_difference` @ address `bp` */
         /* we must find the appropriate size class and insert this free block into that linked list */
-        /* TODO!! */
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(size_difference, 0));
         PUT(FTRP(bp), PACK(size_difference, 0));
@@ -780,7 +779,7 @@ static int heap_check_overlap() {
  *      that the size class would fit in
  */
 static size_t get_size_class(size_t asize) {
-    size_t lower_bound = 32;
+    size_t lower_bound = 2 * DSIZE;
     size_t index = 0;
 
     while (
