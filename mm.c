@@ -22,12 +22,12 @@
 #define ALIGNMENT 16
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
+#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0xF)
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 #define WSIZE       8           // word size (also header & footer size)
 #define DSIZE       16          // double word size
-#define CHUNKSIZE   (1 << 12)   // bytes
+#define CHUNKSIZE   (1 << 6)   // bytes
 
 #define MAX(x, y)   ((x) > (y) ? (x) : (y))
 
@@ -64,7 +64,7 @@
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /* number of `size classes` */
-#define SIZE_CLASS_SIZE 9
+#define SIZE_CLASS_SIZE 8
 
 extern int verbose;
 extern int heap_check_flag;
@@ -73,9 +73,9 @@ char *heap_listp;
 
 /*
 Segregated Free List:
-Since minimum payload size is 16, size classes will look like:
-    {16 ~ 31}, {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
-This is 9 entries, so we'll keep an array of pointers of size 9.
+Since minimum block size is 32, size classes will look like:
+    {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
+This is 8 entries, so we'll keep an array of pointers of size 8.
 */
 
 /* array of char pointers */
@@ -190,25 +190,172 @@ void mm_free(void *bp) {
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
- *
- * TODO: improve performance by attempting in-place realloc
  */
 void *mm_realloc(void *ptr, size_t size) {
+    if (verbose)
+        printf("Entering mm_realloc()\n");
+
     void *oldptr = ptr;
     void *newptr;
-    size_t copySize;
+    size_t copy_size;
+
+    if (size == 0) {
+        if (verbose)
+            printf("realloc requested size is 0.\n");
+
+        mm_free(oldptr);
+        return NULL;
+    }
+
+    if (oldptr == NULL) {
+        if (verbose)
+            printf("old pointer value is NULL.\n");
+
+        return mm_malloc(size);
+    }
+
+    size_t original_size = GET_SIZE(HDRP((char*)oldptr));
+    size_t aligned_size = ALIGN(size) + DSIZE;
+
+    if (aligned_size == original_size) {
+        if (verbose)
+            printf("Same size as original block is requested.\n");
+
+        return oldptr;
+    }
+
+    /* from here, oldptr is valid, size is not 0, */
+    /* and original_size > aligned_size or original_size < aligned_size */
+
+    /* current allocated block is large enough to hold new size */
+    if (aligned_size < original_size) {
+        if (verbose)
+            printf("Originally allocated size is larger than requested. OG size: %lu\tReq size: %lu\n", original_size, aligned_size);
+
+        /* use the entire allocated block */
+        if (original_size <= copy_size + 2 * DSIZE)
+            return oldptr;
+
+        if (verbose)
+            printf("Splitting original block.\n");
+        /* split current allocated block */
+        PUT(HDRP(oldptr), PACK(aligned_size, 1));
+        PUT(FTRP(oldptr), PACK(aligned_size, 1));
+        newptr = oldptr;
+
+        /* now, mark the splitted block as free */
+        oldptr = NEXT_BLKP(oldptr);
+        PUT(HDRP(oldptr), PACK(original_size - aligned_size, 0));
+        PUT(FTRP(oldptr), PACK(original_size - aligned_size, 0));
+
+        /* coalesce and insert new free block into appropriate linked list */
+        coalesce(oldptr);
+
+        return newptr;
+    }
+
+    /* current allocated block is not large enough, but search for adjacent free blocks */
+    size_t additional_required_size = aligned_size - original_size;
+
+    void* next_bp = NEXT_BLKP(oldptr);
+    /* search for next block */
+    if (next_bp != NULL && !GET_ALLOC(HDRP(next_bp))) {
+        size_t next_size = GET_SIZE(HDRP(next_bp));
+
+        if (verbose)
+            printf("Inspecting next block. og size: %lu\tnext size: %lu\treq size: %lu\taddreqsize: %lu\n", original_size, next_size, aligned_size, additional_required_size);
+
+        /* next block's space is more than enough, split free block */
+        if (next_size >= additional_required_size + 2 * DSIZE) {
+            if (verbose)
+                printf("More than enough space\n");
+
+            /* remove free block originally at next_bp. we'll replace it with a new one */
+            remove_node(next_bp);
+
+            PUT(HDRP(oldptr), PACK(aligned_size, 1));
+            PUT(FTRP(oldptr), PACK(aligned_size, 1));
+            newptr = oldptr;
+
+            next_bp = next_bp + additional_required_size;
+            PUT(HDRP(next_bp), PACK(next_size - additional_required_size, 0));
+            PUT(FTRP(next_bp), PACK(next_size - additional_required_size, 0));
+            /* coalesce and insert new free block into appropriate linked list */
+            coalesce(next_bp);
+
+            return newptr;
+        }
+
+        /* if there's just enough space, take the entire next block */
+        else if (next_size >= additional_required_size) {
+            /* next_bp no longer contains a free block */
+            remove_node(next_bp);
+
+            PUT(HDRP(oldptr), PACK(original_size + next_size, 1));
+            PUT(FTRP(oldptr), PACK(original_size + next_size, 1));
+            /* no need to coalesce and insert, as there are no free blocks */
+            return oldptr;
+        }
+
+        /* not enough space in the next block */
+        if (verbose)
+            printf("Not enough space\n");
+    }
+
+    void* prev_bp = PREV_BLKP(oldptr);
+    if (prev_bp != NULL && !GET_ALLOC(HDRP(prev_bp))) {
+        size_t prev_size = GET_SIZE(HDRP(prev_bp));
+
+        if (verbose)
+            printf("Inspecting prev block. og size: %lu\tprev size: %lu\treq size: %lu\taddreqsize: %lu\n", original_size, prev_size, aligned_size, additional_required_size);
+
+        /* prev block's space is more than enough, split free block */
+        if (prev_size >= 2 * DSIZE + additional_required_size) {
+            /* remove node at prev_bp. its signature will be different.          */
+            /* this must be done before PUT potentially overwrites any link info */
+            remove_node(prev_bp);
+
+            newptr = oldptr - additional_required_size;
+            PUT(HDRP(newptr), PACK(aligned_size, 1));
+            PUT(FTRP(newptr), PACK(aligned_size, 1));
+            memmove(newptr, oldptr, size);
+
+            PUT(HDRP(prev_bp), PACK(prev_size - additional_required_size, 0));
+            PUT(FTRP(prev_bp), PACK(prev_size - additional_required_size, 0));
+
+            coalesce(prev_bp);
+
+            return newptr;
+        }
+
+        /* if there's just enough space, take the entire prev block */
+        else if (prev_size >= additional_required_size) {
+            /* prev_bp no longer contains a free block */
+            remove_node(prev_bp);
+
+            PUT(HDRP(prev_bp), PACK(prev_size + original_size, 1));
+            PUT(FTRP(prev_bp), PACK(prev_size + original_size, 1));
+            memmove(prev_bp, oldptr, size);
+
+            return prev_bp;
+        }
+
+        /* not enough space in the next block */
+    }
+    if (verbose)
+        printf("Allocating new memory.\n");
 
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
 
-    copySize = GET_SIZE(HDRP((char*)oldptr));
+    copy_size = GET_SIZE(HDRP(ptr)) - DSIZE;
 
     /* realloc request size is smaller than originally allocated */
-    if (size < copySize)
-        copySize = size;
+    if (size < copy_size)
+        copy_size = size;
 
-    memcpy(newptr, oldptr, copySize);
+    memcpy(newptr, oldptr, copy_size);
     mm_free(oldptr);
 
     if (heap_check_flag)
@@ -219,7 +366,6 @@ void *mm_realloc(void *ptr, size_t size) {
 }
 
 static void *coalesce(void *bp) {
-
     if (verbose)
         printf("Entering coalesce()\n");
 
@@ -311,8 +457,8 @@ static void *find_fit(size_t asize) {
     if (verbose)
         printf("Entering find_fit()\n");
 
-    /* lower bound of size class. starts from 16 (inclusive) */
-    size_t lower_bound = 16;
+    /* lower bound of size class. starts from 32 (inclusive) */
+    size_t lower_bound = 2 * DSIZE;
 
     size_t size_class_index = 0;
     while (
@@ -368,26 +514,6 @@ static void *find_fit(size_t asize) {
     /* above the appropriate size class. so there is no fitting block */
 
     return NULL;
-
-    /* void *bp = free_head; */
-
-    /* while (bp != NULL) { */
-    /*     /1* bp is not allocated and free space is enough *1/ */
-    /*     if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) { */
-    /*         if (verbose) */
-    /*             printf("Fit found at %p\n", bp); */
-
-    /*         return bp; */
-    /*     } */
-
-    /*     bp = GET_NEXTP(bp); */
-    /* } */
-
-
-    /* if (verbose) */
-    /*     printf("Fit not found. exiting find_fit()\n"); */
-
-    /* return NULL; */
 }
 
 /*
@@ -423,15 +549,6 @@ static void place(void *bp, size_t asize) {
 
         /* remove the whole node at bp, as this whole block is allocated */
         remove_node(bp);
-
-/*         /1* modify two connections *1/ */
-/*         if (prev_pp == NULL) */
-/*             free_head = next_bp; */
-/*         else */
-/*             PUTP(ADJ_NEXTP(prev_pp), next_bp); */
-
-/*         if (next_bp != NULL) */
-/*             PUTP(ADJ_PREVP(next_bp), prev_pp); */
     }
 }
 
@@ -501,13 +618,13 @@ void mm_check() {
     printf("------- Iterating blocks ------\n");
     char* iter = NEXT_BLKP(heap_listp);
     size_t count = 1;
-    printf("size: %u\n", GET_SIZE(HDRP(iter)));
     while (GET_SIZE(HDRP(iter)) != 0) {
         printf("Block number %03lu\n", count);
         printf("\tSize:%8d\tAllocated:%4d\tAddress: %p\n", GET_SIZE(HDRP(iter)), GET_ALLOC(FTRP(iter)), iter);
         iter = NEXT_BLKP(iter);
         count += 1;
     }
+    printf("Epilogue\n\tSize:%8d\tAllocated:%4d\tAddress: %p\n", GET_SIZE(HDRP(iter)), GET_ALLOC(HDRP(iter)), iter);
     printf("-------------------------------\n");
 
     printf("----- Iterating free list -----\n");
@@ -519,7 +636,7 @@ void mm_check() {
         count = 1;
         while (ptr != NULL) {
             printf("Block number %03lu\n", count);
-            printf("\tClass:%2lu\tSize:%8d\tAllocated:%4dNext: %p\n", i, GET_SIZE(HDRP(ptr)), GET_ALLOC(HDRP(ptr)), GET_NEXTP(ptr));
+            printf("\tClass:%2lu\tSize:%8d\tAllocated:%4d\tNext: %p\n", i, GET_SIZE(HDRP(ptr)), GET_ALLOC(HDRP(ptr)), GET_NEXTP(ptr));
             ptr = GET_NEXTP(ptr);
             count += 1;
         }
@@ -664,7 +781,7 @@ static int heap_check_overlap() {
  *      that the size class would fit in
  */
 static size_t get_size_class(size_t asize) {
-    size_t lower_bound = 16;
+    size_t lower_bound = 32;
     size_t index = 0;
 
     while (
