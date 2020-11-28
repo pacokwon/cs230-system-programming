@@ -1,13 +1,10 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
  *
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
+ * Here, I use a segregated list approach, maintaining a linked list for
+ * size classes of the pattern [2 ^ n, 2 ^ n+1).
+ * New free blocks are inserted at the very front, and re-allocation attempts
+ * to optimize performance by searching its previous and next blocks.
  *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,34 +61,31 @@
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /* number of `size classes` */
-#define SIZE_CLASS_SIZE 20
+#define SIZE_CLASS_SIZE 10
 
 extern int verbose;
 extern int heap_check_flag;
 
-char *heap_listp;
-
 /*
 Segregated Free List:
 Since minimum block size is 16, size classes will look like:
-    {16 ~ 31} {32 ~ 63}, {64 ~ 127}, ..., {2048 ~ 4095}, {4096 ~ inf}
-This is 8 entries, so we'll keep an array of pointers of size 8.
+    {16 ~ 31} {32 ~ 63}, {64 ~ 127}, ...,
 */
-
-/* array of char pointers */
 static char **heads;
 
-char *epilogue;     // pointer to bp of first node
+char *epilogue;
+char *heap_listp;
 
 static void *coalesce(void *bp);
 static void *extend_heap(size_t words);
 static void *find_fit(size_t asize);
-static void place(void *bp, size_t asize);
+static void *place(void *bp, size_t asize);
 static void insert_first(void* bp);
 static void remove_node(void *bp);
 
-void check_blocks();
-void check_free_list();
+static void mm_check();
+static void check_blocks();
+static void check_free_list();
 
 static int heap_check();
 static int heap_check_free();
@@ -100,7 +94,6 @@ static int heap_check_overlap();
 static int heap_check_size_class();
 
 static size_t get_size_class();
-void mm_check();
 
 /*
  * mm_init - initialize the malloc package.
@@ -149,7 +142,7 @@ void *mm_malloc(size_t size) {
         newsize = DSIZE + ALIGN(size);      // header + footer -> DSIZE. aligned payload -> N * DSIZE
 
     if ((bp = find_fit(newsize)) != NULL) {
-        place(bp, newsize);
+        bp = place(bp, newsize);
         if (verbose > 1)
             mm_check();
         return bp;
@@ -159,7 +152,7 @@ void *mm_malloc(size_t size) {
     if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
         return NULL;
 
-    place(bp, newsize);
+    bp = place(bp, newsize);
     if (verbose > 1)
         mm_check();
 
@@ -236,7 +229,7 @@ void *mm_realloc(void *ptr, size_t size) {
             printf("Originally allocated size is larger than requested. OG size: %lu\tReq size: %lu\n", original_size, aligned_size);
 
         /* use the entire allocated block */
-        if (original_size <= copy_size + 2 * DSIZE)
+        if (original_size <= aligned_size + 2 * DSIZE)
             return oldptr;
 
         if (verbose)
@@ -471,7 +464,7 @@ static void *find_fit(size_t asize) {
         /* find the first node that fits `asize` */
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
             if (verbose)
-                printf("Fit found at appropriate size class %lu.\n", size_class_index);
+                printf("Fit found at appropriate size class %lu @ %p.\n", size_class_index, bp);
 
             return bp;
         }
@@ -511,31 +504,45 @@ static void *find_fit(size_t asize) {
  *      in the free block at address `bp`
  *      NOTE: `asize` must be smaller than or equal to the block size at `bp`
  */
-static void place(void *bp, size_t asize) {
+static void *place(void *bp, size_t asize) {
     if (verbose)
         printf("Entering place()\n");
 
     size_t csize = GET_SIZE(HDRP(bp));
     size_t size_difference = csize - asize;
-    if (size_difference >= (2 * DSIZE)) {
+    char* free_ptr;
+
+    /* attach larger size blocks to the right */
+    if (size_difference >= 256) {
+        remove_node(bp);
+
+        PUT(HDRP(bp), PACK(size_difference, 0));
+        PUT(FTRP(bp), PACK(size_difference, 0));
+        insert_first(bp);
+
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+    } else if (size_difference >= (2 * DSIZE)) {
         /* first, remove the whole node at bp */
         remove_node(bp);
+
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
 
         /* now, we have a new free block of size `size_difference` @ address `bp` */
         /* we must find the appropriate size class and insert this free block into that linked list */
-        bp = NEXT_BLKP(bp);
-        PUT(HDRP(bp), PACK(size_difference, 0));
-        PUT(FTRP(bp), PACK(size_difference, 0));
-        insert_first(bp);
+        free_ptr = NEXT_BLKP(bp);
+        PUT(HDRP(free_ptr), PACK(size_difference, 0));
+        PUT(FTRP(free_ptr), PACK(size_difference, 0));
+        insert_first(free_ptr);
     } else {
+        remove_node(bp);
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
-
-        /* remove the whole node at bp, as this whole block is allocated */
-        remove_node(bp);
     }
+
+    return bp;
 }
 
 /*
@@ -558,42 +565,11 @@ static void insert_first(void* bp) {
         PUTP(cur_np, NULL);
         PUTP(cur_pp, NULL);
     } else { // at least a single element exists
-        /* at this point, iter cannot be null */
-        char* iter = heads[size_class_index], *prev_iter = NULL;
-
-        while (iter != NULL) {
-            /* find the first node that has a higher block size than that of bp */
-            size_t iter_size = GET_SIZE(HDRP(iter));
-
-            /* found the fitting node */
-            if (iter_size > cur_size) {
-                /* captured node is the first node. insert between iter and head */
-                if (prev_iter == NULL) {
-                    PUTP(cur_np, iter);
-                    PUTP(cur_pp, NULL);
-                    PUTP(ADJ_PREVP(iter), cur_pp);
-                    heads[size_class_index] = cur_np;
-                }
-                /* insert between iter and prev_iter */
-                else {
-                    PUTP(cur_np, iter);
-                    PUTP(cur_pp, ADJ_PREVP(prev_iter));
-                    PUTP(prev_iter, cur_np);
-                    PUTP(ADJ_PREVP(iter), cur_pp);
-                }
-
-                /* found fit and inserted. return */
-                return;
-            }
-
-            prev_iter = iter;
-            iter = GET_NEXTP(iter);
-        }
-
-        /* all blocks in linked list has smaller size than that of bp */
-        PUTP(prev_iter, cur_np);
-        PUTP(cur_pp, ADJ_PREVP(prev_iter));
-        PUTP(cur_np, NULL);
+        char* head = heads[size_class_index];
+        PUTP(cur_np, head);
+        PUTP(cur_pp, NULL);
+        PUTP(ADJ_PREVP(head), cur_pp);
+        heads[size_class_index] = cur_np;
     }
 }
 
@@ -632,7 +608,12 @@ static void remove_node(void *bp) {
     }
 }
 
-void check_blocks() {
+static void mm_check() {
+    check_blocks();
+    check_free_list();
+}
+
+static void check_blocks() {
     printf("------- Iterating blocks ------\n");
     char* iter = NEXT_BLKP(heap_listp);
     size_t count = 1;
@@ -646,7 +627,7 @@ void check_blocks() {
     printf("-------------------------------\n");
 }
 
-void check_free_list() {
+static void check_free_list() {
     printf("----- Iterating free list -----\n");
 
     for (size_t i = 0; i < SIZE_CLASS_SIZE; i++) {
@@ -665,10 +646,6 @@ void check_free_list() {
     printf("-------------------------------\n");
 }
 
-void mm_check() {
-    check_blocks();
-    check_free_list();
-}
 
 static int heap_check() {
     if (verbose)
@@ -849,10 +826,10 @@ static size_t get_size_class(size_t asize) {
     size_t lower_bound = 2 * DSIZE;
 
     while (
-        !(lower_bound <= asize && asize < lower_bound * 2) &&
+        !(lower_bound <= asize && asize < lower_bound << 1) &&
         index < SIZE_CLASS_SIZE
     ) {
-        lower_bound *= 2;
+        lower_bound <<= 1;
         index += 1;
     }
 
