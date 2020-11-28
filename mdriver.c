@@ -89,7 +89,6 @@ typedef struct {
  * Global variables
  *******************/
 int verbose = 0;        /* global flag for verbose output */
-int heap_check_flag = 0;        /* global flag for verbose output */
 static int errors = 0;  /* number of errs found when running student malloc */
 char msg[MAXLINE];      /* for whenever we need to compose an error message */
 
@@ -133,8 +132,6 @@ static void unix_error(char *msg);
 static void malloc_error(int tracenum, int opnum, char *msg);
 static void app_error(char *msg);
 
-extern void mm_check();
-
 /**************
  * Main routine
  **************/
@@ -160,7 +157,7 @@ int main(int argc, char **argv)
     /*
      * Read and interpret the command line arguments
      */
-    while ((c = getopt(argc, argv, "f:t:hvVgalc")) != EOF) {
+    while ((c = getopt(argc, argv, "f:t:hvVgal")) != EOF) {
         switch (c) {
             case 'g': /* Generate summary info for the autograder */
                 autograder = 1;
@@ -192,9 +189,6 @@ int main(int argc, char **argv)
             case 'h': /* Print this message */
                 usage();
                 exit(0);
-            case 'c':
-                heap_check_flag = 1;
-                break;
             default:
                 usage();
                 exit(1);
@@ -227,7 +221,7 @@ int main(int argc, char **argv)
             unix_error("libc_stats calloc in main failed");
 
         /* Evaluate the libc malloc package using the K-best scheme */
-        for (i = 0; i < num_tracefiles; i++) {
+        for (i=0; i < num_tracefiles; i++) {
             trace = read_trace(tracedir, tracefiles[i]);
             libc_stats[i].ops = trace->num_ops;
             if (verbose > 1)
@@ -264,17 +258,13 @@ int main(int argc, char **argv)
     mem_init();
 
     /* Evaluate student's mm malloc package using the K-best scheme */
-    for (i = 0; i < num_tracefiles; i++) {
+    for (i=0; i < num_tracefiles; i++) {
         trace = read_trace(tracedir, tracefiles[i]);
-        printf("tracefile: %s\n", tracefiles[i]);
         mm_stats[i].ops = trace->num_ops;
         if (verbose > 1)
-            printf("Checking mm_malloc for correctness, \n");
+            printf("Checking mm_malloc for correctness, ");
         mm_stats[i].valid = eval_mm_valid(trace, i, &ranges);
         if (mm_stats[i].valid) {
-            if (verbose)
-                printf("Valid!\n");
-
             if (verbose > 1)
                 printf("efficiency, ");
             mm_stats[i].util = eval_mm_util(trace, i, &ranges);
@@ -582,8 +572,7 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
         switch (trace->ops[i].type) {
 
             case ALLOC: /* mm_malloc */
-                if (verbose)
-                    printf("\n%5d\tALLOC\n", i);
+
                 /* Call the student's malloc */
                 if ((p = mm_malloc(size)) == NULL) {
                     malloc_error(tracenum, i, "mm_malloc failed.");
@@ -598,7 +587,6 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                 if (add_range(ranges, p, size, tracenum, i) == 0)
                     return 0;
 
-
                 /* ADDED: cgw
                  * fill range with low byte of index.  This will be used later
                  * if we realloc the block and wish to make sure that the old
@@ -606,16 +594,13 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                  */
                 memset(p, index & 0xFF, size);
 
-
                 /* Remember region */
                 trace->blocks[index] = p;
                 trace->block_sizes[index] = size;
-
                 break;
 
             case REALLOC: /* mm_realloc */
-                if (verbose)
-                    printf("\n%5d\tREALLOC\n", i);
+
                 /* Call the student's realloc */
                 oldp = trace->blocks[index];
                 if ((newp = mm_realloc(oldp, size)) == NULL) {
@@ -652,8 +637,7 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case FREE: /* mm_free */
-                if (verbose)
-                    printf("\n%5d\tFREE\n", i);
+
                 /* Remove region from list and call student's free function */
                 p = trace->blocks[index];
                 remove_range(ranges, p);
@@ -700,8 +684,6 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
         switch (trace->ops[i].type) {
 
             case ALLOC: /* mm_alloc */
-                if (verbose)
-                    printf("\n%5d\tALLOC\n", i);
                 index = trace->ops[i].index;
                 size = trace->ops[i].size;
 
@@ -722,8 +704,6 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case REALLOC: /* mm_realloc */
-                if (verbose)
-                    printf("\n%5d\tREALLOC\n", i);
                 index = trace->ops[i].index;
                 newsize = trace->ops[i].size;
                 oldsize = trace->block_sizes[index];
@@ -746,8 +726,6 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges)
                 break;
 
             case FREE: /* mm_free */
-                if (verbose)
-                    printf("\n%5d\tFREE\n", i);
                 index = trace->ops[i].index;
                 size = trace->block_sizes[index];
                 p = trace->blocks[index];

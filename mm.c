@@ -64,7 +64,10 @@
 #define SIZE_CLASS_SIZE 10
 
 extern int verbose;
-extern int heap_check_flag;
+
+/* used to be an extern variable, initially declared in a modified version mdriver.c */
+/* Here, I just make it a global variable here and set it to 0 for submission        */
+int heap_check_flag = 0;
 
 /*
 Segregated Free List:
