@@ -79,9 +79,7 @@ This is 8 entries, so we'll keep an array of pointers of size 8.
 */
 
 /* array of char pointers */
-char *heads[SIZE_CLASS_SIZE];
-
-char *free_head;    // pointer to bp of first node
+static char **heads;
 
 char *epilogue;     // pointer to bp of first node
 
@@ -104,6 +102,10 @@ void mm_check();
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
+    heads = (char**) mem_sbrk(SIZE_CLASS_SIZE * WSIZE);
+    for (size_t index = 0; index < SIZE_CLASS_SIZE; index++)
+        heads[index] = NULL;
+
     if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void*)-1)
         return -1;
 
@@ -114,9 +116,6 @@ int mm_init(void) {
 
     epilogue = heap_listp + 3 * WSIZE;
     heap_listp += (2 * WSIZE);
-
-    for (size_t i = 0; i < SIZE_CLASS_SIZE; i++)
-        heads[i] = NULL;
 
     char *bp;
     /* Allocate CHUNKSIZE bytes ahead of time */
