@@ -1,4 +1,9 @@
+# datalab
 bits.p.c
 btest
 fshow
 ishow
+
+# malloc
+*.o
+mdriver
