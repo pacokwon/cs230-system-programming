@@ -1,0 +1,7 @@
+.ccls-cache/
+csapp.o
+proxy
+proxy.o
+tiny/cgi-bin/adder
+tiny/csapp.o
+tiny/tiny
