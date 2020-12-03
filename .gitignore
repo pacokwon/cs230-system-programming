@@ -5,3 +5,9 @@ proxy.o
 tiny/cgi-bin/adder
 tiny/csapp.o
 tiny/tiny
+
+# swap file
+[._]*.sw[a-p]
+
+# .proxy directory for grading
+.proxy
