@@ -8,13 +8,11 @@
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
+void *thread(void* vargp);
 void handle_connection(int connfd);
-void read_request_headers(rio_t *rp);
-void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 int parse_uri(char *uri, char *host, char *port, char *path);
 void handle_request(rio_t *conn_rio, rio_t *client_rio, int clientfd, int connfd, char *method, char *host, char *path);
 int is_extra_header(char *str, int length);
-void *thread(void* vargp);
 
 int main(int argc, char **argv) {
     /* ignore SIGPIPE signals */
@@ -50,6 +48,13 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+/*
+ * thread - spawn thread to handle connected file descriptor requests
+ *   a pointer to an integer(connected file descriptor) is passed as an argument.
+ *   this function calls `handle_connection` with the given argument.
+ *   this thread runs in detached mode, so that it will clean itself up.
+ *   the passed pointer is dynamically allocated, so we free it with the fd before returning.
+ */
 void *thread(void* vargp) {
     int connfd = *(int *)(vargp);
     Pthread_detach(Pthread_self());
@@ -59,6 +64,11 @@ void *thread(void* vargp) {
     return NULL;
 }
 
+/*
+ * handle_connection - receive requests from the connected file descriptor,
+ *   then pass it to the host. After that, receive responses from the host and
+ *   pass it to the connected file descriptor.
+ */
 void handle_connection(int connfd) {
     rio_t rio;
     char buf[MAXLINE];
@@ -91,38 +101,6 @@ void handle_connection(int connfd) {
 
     handle_request(&rio, &client_rio, clientfd, connfd, method, host, path);
     Close(clientfd);
-}
-
-void read_request_headers(rio_t *rp) {
-    char buf[MAXLINE];
-
-    Rio_readlineb(rp, buf, MAXLINE);
-    while (strcmp(buf, "\r\n")) {
-        Rio_readlineb(rp, buf, MAXLINE);
-        printf("%s", buf);
-    }
-
-    return;
-}
-
-void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
-    char buf[MAXLINE], body[MAXBUF];
-
-    sprintf(body, "<html><title>Proxy Error</title>");
-    sprintf(body, "%s<body style='background: #ffffff'>\r\n", body);
-    sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
-    sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
-    sprintf(body, "%s<hr><em>Proxy Server</em>\r\n", body);
-
-    sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
-    Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-type: text/html\r\n");
-    Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    Rio_writen(fd, buf, strlen(buf));
-    Rio_writen(fd, body, strlen(body));
-
-    return;
 }
 
 /*
