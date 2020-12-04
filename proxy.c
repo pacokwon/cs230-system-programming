@@ -8,17 +8,22 @@
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
-void handle_connection(int fd);
+void handle_connection(int connfd);
 void read_request_headers(rio_t *rp);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 int parse_uri(char *uri, char *host, char *port, char *path);
 void handle_request(rio_t *conn_rio, rio_t *client_rio, int clientfd, int connfd, char *method, char *host, char *path);
 int is_extra_header(char *str, int length);
+void *thread(void* vargp);
 
 int main(int argc, char **argv) {
-    int listenfd, connfd;
+    /* ignore SIGPIPE signals */
+    signal(SIGPIPE, SIG_IGN);
+
+    int listenfd;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
+    pthread_t tid;
     struct sockaddr_storage clientaddr;
 
     if (argc != 2) {
@@ -32,23 +37,33 @@ int main(int argc, char **argv) {
     while (1) {
         clientlen = sizeof(clientaddr);
 
-        /* connfd stores the connected file descriptor */
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+        int *connfdp = malloc(sizeof(int));
+        /* connfdp stores a pointer to the connected file descriptor */
+        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
         Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-        handle_connection(connfd);
-        Close(connfd);
+        Pthread_create(&tid, NULL, thread, connfdp);
     }
 
+    Close(listenfd);
     return 0;
 }
 
-void handle_connection(int fd) {
+void *thread(void* vargp) {
+    int connfd = *(int *)(vargp);
+    Pthread_detach(Pthread_self());
+    free(vargp);
+    handle_connection(connfd);
+    Close(connfd);
+    return NULL;
+}
+
+void handle_connection(int connfd) {
     rio_t rio;
     char buf[MAXLINE];
 
-    Rio_readinitb(&rio, fd);
+    Rio_readinitb(&rio, connfd);
 
     /* this will read header information */
     /* header information is in the <method> <uri> <version> syntax */
@@ -74,7 +89,7 @@ void handle_connection(int fd) {
     rio_t client_rio;
     Rio_readinitb(&client_rio, clientfd);
 
-    handle_request(&rio, &client_rio, clientfd, fd, method, host, path);
+    handle_request(&rio, &client_rio, clientfd, connfd, method, host, path);
     Close(clientfd);
 }
 
@@ -164,7 +179,6 @@ int parse_uri(char *uri, char *host, char *port, char *path) {
     return 0;
 }
 
-
 /*
  * handle_request - pass client headers to host and send a request. then, pass the response back to the client
  */
@@ -187,7 +201,6 @@ void handle_request(rio_t *conn_io, rio_t *client_rio, int clientfd, int connfd,
     sprintf(buf, "Proxy-Connection: close\r\n\r\n");
     Rio_writen(clientfd, buf, strlen(buf));
 
-
     /* read request headers from client */
     Rio_readlineb(conn_io, buf, MAXLINE);
     while (strcmp(buf, "\r\n")) {
@@ -204,7 +217,6 @@ void handle_request(rio_t *conn_io, rio_t *client_rio, int clientfd, int connfd,
         Rio_readlineb(conn_io, buf, MAXLINE);
     }
 
-    ssize_t bytes_read;
     char header_buf[MAXLINE], value_buf[MAXLINE];
     int content_length = -1;
 
