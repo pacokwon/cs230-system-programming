@@ -187,6 +187,8 @@ void handle_request(rio_t *conn_io, rio_t *client_rio, int clientfd, int connfd,
     sprintf(buf, "Proxy-Connection: close\r\n\r\n");
     Rio_writen(clientfd, buf, strlen(buf));
 
+
+    /* read request headers from client */
     Rio_readlineb(conn_io, buf, MAXLINE);
     while (strcmp(buf, "\r\n")) {
         /* `buf` will have a format of header: value, */
@@ -195,6 +197,7 @@ void handle_request(rio_t *conn_io, rio_t *client_rio, int clientfd, int connfd,
 
         /* if `buf` does not contain a colon, it is an invalid header */
         /* also, if `buf` is not an extra header, skip it */
+        /* forward headers to server */
         if (colon && is_extra_header(buf, colon - buf))
             Rio_writen(clientfd, buf, strlen(buf));
 
@@ -202,8 +205,38 @@ void handle_request(rio_t *conn_io, rio_t *client_rio, int clientfd, int connfd,
     }
 
     ssize_t bytes_read;
-    while ((bytes_read = Rio_readlineb(client_rio, buf, MAXLINE)) > 0)
+    char header_buf[MAXLINE], value_buf[MAXLINE];
+    int content_length = -1;
+
+    /* read response headers from server */
+    Rio_readlineb(client_rio, buf, MAXLINE);
+    while (strcmp(buf, "\r\n")) {
+        sscanf(buf, "%[^:]: %s", header_buf, value_buf);
+        if (!strcasecmp(header_buf, "Content-Length"))
+            content_length = atoi(value_buf);
+
         Rio_writen(connfd, buf, strlen(buf));
+        Rio_readlineb(client_rio, buf, MAXLINE);
+    }
+    Rio_writen(connfd, buf, strlen(buf));
+
+    /* there is no content. return. */
+    if (content_length <= 0)
+        return;
+
+    /* current buffer is big enough */
+    if (content_length <= MAXLINE) {
+        Rio_readnb(client_rio, buf, content_length);
+        Rio_writen(connfd, buf, content_length);
+    }
+
+    /* current buffer is not big enough. allocate new buffer on heap */
+    else {
+        void *alloc_buf = malloc(content_length);
+        Rio_readnb(client_rio, alloc_buf, content_length);
+        Rio_writen(connfd, alloc_buf, content_length);
+        free(alloc_buf);
+    }
 }
 
 /*
