@@ -7,7 +7,7 @@
     README.md     - This file
     tsh.c	      - The shell program that you will write and hand in
     tshref        - The reference shell binary.
-    
+
     The remaining files are used to test your shell
       sdriver.pl  - The trace-driven shell driver
       trace*.txt  - The 15 trace files that control the shell driver
@@ -21,7 +21,7 @@
 
 ***********************************************************
 ## 1. Hand Out Instructions
-First make sure you fork the `CS230/LAB5` repository to your **private** namespace! 
+First make sure you fork the `CS230/LAB5` repository to your **private** namespace!
 If you don't, you won't be able to submit your work.
 Once you have your private repo, you may clone your private repo.
 Also, make sure you have added your SSH key to the GitLab Web UI.
@@ -31,7 +31,7 @@ announcements and Lab 1 `README`.
 unix> git clone ssh://git@cs230.kaist.ac.kr:10022/cs[your_student_id]/lab5.git
 ```
 Looking at the `tsh.c` (*tiny shell*) file, you will see that it contains a functional
-skeleton of a simple Unix shell. 
+skeleton of a simple Unix shell.
 To help you get started, we have already implemented the less interesting functions.
 Your assignment is to complete the remaining empty functions listed below.
 As a sanity check for you, we’ve listed the approximate number
@@ -150,7 +150,7 @@ While doing this project and testing them, you would very likely end up creating
 Since the zombie processes can waste the shared servers' resources, we ask you to clean them up immediately.
 There will be a program periodically running to check for any zombie process running longer than three hours.
 
-**Note that you will get a PENALTY in your score if you get caught leaving them more than three times.** 
+**Note that you will get a PENALTY in your score if you get caught leaving them more than three times.**
 
 The following command will give you the PID of the zombie process if there's any
 ```
@@ -178,7 +178,7 @@ Lastly, as before DO NOT **STAR** the GitLab repository.
 We have provided some tools to help you check your work.
 
 **Reference solution.** The Linux executable `tshref` is the reference solution for the shell. Run this program
-to resolve any questions you have about how your shell should behave. 
+to resolve any questions you have about how your shell should behave.
 *Your shell should emit output that is identical to the reference solution*
 (except for PIDs, of course, which change from run to run).
 
@@ -327,16 +327,16 @@ traces as the reference shell, with only two exceptions:
 ***********************************************************
 ## 8. Hand In Instructions
 
-Once you have finished your implementation and your test cases have passed, you 
-can submit your code. Its similar to what you have done in Lab 2. Make sure that 
-you add the `tsh.c` file, and commit your changes. You can do so with the 
+Once you have finished your implementation and your test cases have passed, you
+can submit your code. Its similar to what you have done in Lab 2. Make sure that
+you add the `tsh.c` file, and commit your changes. You can do so with the
 following commands
 
     unix> git add tsh.c
     unix> git commit -m "Your commit message"
 
-First command adds `tsh.c` to your next commit. Then, you can commit it by typing 
-commit command. Execute following command to make sure that you do not have any 
+First command adds `tsh.c` to your next commit. Then, you can commit it by typing
+commit command. Execute following command to make sure that you do not have any
 uncommitted changes to the `tsh.c` file.
 
     unix> get status
@@ -347,13 +347,13 @@ To hand in your lab, execute the following command
 
 This step will push your local commits onto your GitLab remote repository. Make
 sure that your remote repository is your forked version of the Lab 5. Your
-remote URL should be something like 
-`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab5.git`. You can 
-check your remote URL using the following command: 
+remote URL should be something like
+`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab5.git`. You can
+check your remote URL using the following command:
 
     unix> git remote -v
 
-Check the tags section in the GitLab Web interface to see if your latest code 
+Check the tags section in the GitLab Web interface to see if your latest code
 has been pushed onto the server. The URL to check your tags is
-`https://cs230.kaist.ac.kr:10022/[Your_user_name]/lab5/tags`. Same as 
+`https://cs230.kaist.ac.kr:10022/[Your_user_name]/lab5/tags`. Same as
 previous lab, if you can see the tag on GitLab, your submission is successfully uploaded.

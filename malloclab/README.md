@@ -1,3 +1,7 @@
+# About
+This directory contains lab 6: malloc lab. My approach to this lab is using a segregated list allocator, dividing size classes in [ 2 ** n, 2 ** (n + 1) ) format. This solution has received 90 / 100 credit (50 for util, 40 for perf). Below is the original README from CS230.
+
+
 # LAB 6: Malloc Lab
 
 
@@ -16,7 +20,7 @@ Any clarifications and revisions to the assignments will be posted on Piazza.
 
 ***********************************************************
 ## 3. Hand Out Instructions
-First make sure you fork the `CS230/LAB6` repository to your **private** namespace! 
+First make sure you fork the `CS230/LAB6` repository to your **private** namespace!
 If you don't, you won't be able to submit your work.
 Once you have your private repo, you may clone your private repo.
 Also, make sure you have added your SSH key to the GitLab Web UI.
@@ -58,18 +62,18 @@ implementation) calls `mm_init` to perform any necessary
 initializations, such as allocating the initial heap area.
 The return value should be -1 if there was a problem in performing the
 initialization, 0 otherwise.
-  
+
 - `mm_malloc`: The `mm_malloc` routine returns a pointer
 to an allocated block payload of at least `size` bytes.  The
 entire allocated block should lie within the heap region and should
 not overlap with any other allocated chunk.
 
   We will comparing your implementation to the version of `malloc`
-supplied in the standard C library (`libc`). Since the 
-`libc` malloc always returns payload pointers that are 
+supplied in the standard C library (`libc`). Since the
+`libc` malloc always returns payload pointers that are
 aligned to 8 bytes, your malloc implementation should do likewise
 and always return 8-byte aligned pointers.
-  
+
 - `mm_free`: The `mm_free` routine frees the block
 pointed to by `ptr`.  It returns nothing. This routine is only
 guaranteed to work when the passed pointer (`ptr`) was returned by
@@ -77,12 +81,12 @@ an earlier call to `mm_malloc` or `mm_realloc` and has not
 yet been freed.
 
 - `mm_realloc`: The `mm_realloc` routine returns a pointer
-to an allocated region of at least `size` bytes  with the following 
-constraints. 
+to an allocated region of at least `size` bytes  with the following
+constraints.
 
-  - if `ptr` is NULL, the call is equivalent to {\tt mm\_malloc(size)}; 
+  - if `ptr` is NULL, the call is equivalent to {\tt mm\_malloc(size)};
 
-  - if `size` is equal to zero, the call is equivalent to 
+  - if `size` is equal to zero, the call is equivalent to
 `mm_free`;
 
   - if `ptr` is not NULL, it must have been returned by an
@@ -137,7 +141,7 @@ The `memlib.c` package simulates the memory system for your
 dynamic memory allocator. You can invoke the following functions
 in `memlib.c`:
 
-- `void *mem_sbrk(int incr)`:   
+- `void *mem_sbrk(int incr)`:
 Expands the heap by `incr` bytes, where `incr` is a positive
 non-zero integer and returns a generic pointer to the first byte of
 the newly allocated heap area. The semantics are identical to the Unix
@@ -171,12 +175,12 @@ file.
 
 The driver `mdriver.c` accepts the following command line arguments:
 
-- `-t <tracedir>`: 
-Look for the default trace files in directory `tracedir` 
+- `-t <tracedir>`:
+Look for the default trace files in directory `tracedir`
 instead of the default directory defined in `config.h`.
 
-- `-f <tracefile>`: 
-Use one particular `tracefile` for testing instead of the 
+- `-f <tracefile>`:
+Use one particular `tracefile` for testing instead of the
 default set of tracefiles.
 
 - `-h`:
@@ -189,7 +193,7 @@ Run and measure `libc` malloc in addition to the student's malloc package.
 Verbose output. Print a performance breakdown for each tracefile
 in a compact table.
 
-- `-V}`: 
+- `-V}`:
 More verbose output. Prints additional diagnostic information as each
 trace file is processed.  Useful during debugging for determining
 which trace file is causing your malloc package to fail.
@@ -206,7 +210,7 @@ variants of these calls in your code.
 - You are not allowed to define any global or `static` compound data
 structures such as arrays, structs, trees, or lists in your `mm.c`
 program.  However, you `are` allowed to declare global scalar variables
-such as integers, floats, and pointers in `mm.c`. 
+such as integers, floats, and pointers in `mm.c`.
 
 - For consistency with the `libc malloc` package, which
 returns blocks aligned on 8-byte boundaries, your allocator must
@@ -241,11 +245,11 @@ allocator by computing a *performance index*, $`P`$, which is a
 weighted sum of the space utilization and throughput, $`P = w{U} + (1-w) \min\left(1, \frac{T}{T_{libc}}\right)`$
 , where $`U`$ is your space utilization, $`T`$ is your throughput, and
 $`T_{libc}`$ is the estimated throughput of `libc` malloc on your
-system on the default traces.   
+system on the default traces.
     * The value for $`T_{libc}`$ is a
 constant in the driver (600 Kops/s) that your instructor established
 when they configured the program. The performance index favors space utilization over throughput, with a
-default of $`w = 0.6`$.   
+default of $`w = 0.6`$.
     * Observing that both memory and CPU cycles are expensive system
 resources, we adopt this formula to encourage balanced optimization of
 both memory utilization and throughput.
@@ -253,7 +257,7 @@ Ideally, the performance index will reach $`P = w + (1-w) = 1`$ or $`100\%`$.  S
 metric will contribute at most $w$ and $`1-w`$ to the performance index,
 respectively, you should not go to extremes to optimize either the
 memory utilization or the throughput only. To receive a good score,
-you must achieve a balance between utilization and throughput.      
+you must achieve a balance between utilization and throughput.
 
 - ___Final Score (55 points).___ Final score will be weighted sum of ___Correctness___ and ___Performance___.
 ```math
@@ -264,16 +268,16 @@ your score = correct * \frac{20}{11} + perf * \frac{35}{100}
 ***********************************************************
 ## 10. Hand In Instructions
 
-Once you have finished your implementation and your test cases have passed, you 
-can submit your code. Its similar to what you have done in Lab 5. Make sure that 
-you add the `mm.c` file, and commit your changes. You can do so with the 
+Once you have finished your implementation and your test cases have passed, you
+can submit your code. Its similar to what you have done in Lab 5. Make sure that
+you add the `mm.c` file, and commit your changes. You can do so with the
 following commands
 
     unix> git add mm.c
     unix> git commit -m "Your commit message"
 
-First command adds `mm.c` to your next commit. Then, you can commit it by typing 
-commit command. Execute following command to make sure that you do not have any 
+First command adds `mm.c` to your next commit. Then, you can commit it by typing
+commit command. Execute following command to make sure that you do not have any
 uncommitted changes to the `mm.c` file.
 
     unix> get status
@@ -284,15 +288,15 @@ To hand in your lab, execute the following command
 
 This step will push your local commits onto your GitLab remote repository. Make
 sure that your remote repository is your forked version of the Lab 6. Your
-remote URL should be something like 
-`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab6.git`. You can 
-check your remote URL using the following command: 
+remote URL should be something like
+`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab6.git`. You can
+check your remote URL using the following command:
 
     unix> git remote -v
 
-Check the tags section in the GitLab Web interface to see if your latest code 
+Check the tags section in the GitLab Web interface to see if your latest code
 has been pushed onto the server. The URL to check your tags is
-`https://cs230.kaist.ac.kr:10022/[Your_user_name]/lab6/tags`. Same as 
+`https://cs230.kaist.ac.kr:10022/[Your_user_name]/lab6/tags`. Same as
 previous lab, if you can see the tag on GitLab, your submission is successfully uploaded.
 
 
@@ -305,7 +309,7 @@ testing. We have included two such trace files (`short{1,2}-bal.rep`) that you c
 
 - *Use the `mdriver -v` and `-V` options.*  The
 `-v` option will give you a detailed summary for each trace file.
-The `-V` will also indicate when each trace file is read, which 
+The `-V` will also indicate when each trace file is read, which
 will help you isolate errors.
 
 - *Compile with `gcc -g` and use a debugger.* A debugger
@@ -321,7 +325,7 @@ about the simple implicit list allocator.
 macros.*  Pointer arithmetic in memory managers is confusing and error-prone
 because of all the casting that is necessary. You can reduce the
 complexity significantly by writing macros for your pointer operations.
-See the text for examples. 
+See the text for examples.
 
 - *Do your implementation in stages.*  The first 9 traces
 contain requests to `malloc` and `free`.  The last 2 traces

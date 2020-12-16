@@ -16,7 +16,7 @@ tests in `btest` without violating any of the coding guidelines.
       decl.c	- Used to build btest
       tests.c       - Used to build btest
       tests-header.c- Used to build btest
-    dlc*		- Rule checking compiler binary (data lab compiler)	 
+    dlc*		- Rule checking compiler binary (data lab compiler)
     driver.pl*	- Driver program that uses btest and dlc to autograde bits.c
     Driverhdrs.pm   - Header file for optional "Beat the Prof" contest
     fshow.c		- Utility for examining floating-point representations
@@ -24,10 +24,10 @@ tests in `btest` without violating any of the coding guidelines.
 
 ***********************************************************
 ## 1. Handout instructions
-First make sure you fork the `CS230/LAB2` repository to your private namespace! 
-If you don't, you won't be able to submit your work. Once you have your private 
-repo, you may clone your private repo. Also, make sure you have added your SSH 
-key to the GitLab Web UI. To check SSH key settings and how to fork and clone, 
+First make sure you fork the `CS230/LAB2` repository to your private namespace!
+If you don't, you won't be able to submit your work. Once you have your private
+repo, you may clone your private repo. Also, make sure you have added your SSH
+key to the GitLab Web UI. To check SSH key settings and how to fork and clone,
 please see previous announcements and Lab 1 `README`.
 
     unix> git clone ssh://git@cs230.kaist.ac.kr:10022/cs[your_student_id]/lab2.git
@@ -50,7 +50,7 @@ Use the dlc compiler (`./dlc`) to automatically check your version of
 Otherwise it prints messages that flag any problems.  Running `dlc` with
 the `-e` switch:
 
-    unix> ./dlc -e bits.c  
+    unix> ./dlc -e bits.c
 
 causes `dlc` to print counts of the number of operators used by each function.
 
@@ -149,17 +149,17 @@ Example usages:
 *******************
 ## 5. Handin Instructions
 
-Once you have finished your implementation and your test cases have passed, you 
-can submit your code. Its similar to what you have done in Lab 2. Make sure that 
-you add the `bits.c` file, and commit your changes. You can do so with the 
+Once you have finished your implementation and your test cases have passed, you
+can submit your code. Its similar to what you have done in Lab 2. Make sure that
+you add the `bits.c` file, and commit your changes. You can do so with the
 following commands
 
     unix> git add bits.c
     unix> git commit -m "Your commit message"
 
 
-First command adds `bits.c` to your cimmit. Then, you can commit it by typing 
-commit command. Execute following command to make sure that you do not have any 
+First command adds `bits.c` to your cimmit. Then, you can commit it by typing
+commit command. Execute following command to make sure that you do not have any
 uncommitted changes to the `bits.c` file.
 
     unix> get status
@@ -170,15 +170,15 @@ To hand in your lab, execute the following command
 
 This step will push your local commits onto your GitLab remote repository. Make
 sure that your remote repository is your forked version of the Lab 2. Your
-remote URL should be something like 
-`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab2.git`. You can 
-check your remote URL using the following command: 
+remote URL should be something like
+`ssh://git@cs230.kaist.ac.kr:10022/[Your_user_name]/lab2.git`. You can
+check your remote URL using the following command:
 
     unix> git remote -v
 
-Check the tags section in the GitLab Web interface to see if your latest code 
+Check the tags section in the GitLab Web interface to see if your latest code
 has been pushed onto the server. The URL to check your tags is
-`https://cs230.kaist.ac.kr:10080/[Your_user_name]/lab2/tags`. Same as 
+`https://cs230.kaist.ac.kr:10080/[Your_user_name]/lab2/tags`. Same as
 previous lab, if you can see the tag on GitLab, your submission is successfully uploaded.
 *******************
 

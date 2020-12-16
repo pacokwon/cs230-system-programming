@@ -79,7 +79,7 @@ This step will push your local commits onto your GitLab remote repository. Make 
 $ git remote -v
 ```
 
-Check the tags section in the GitLab Web interface to see if your latest code has been pushed onto the server. The URL to check your tags is [https://cs230.kaist.ac.kr/cs[your_student_id]/lab1/tags](). 
+Check the tags section in the GitLab Web interface to see if your latest code has been pushed onto the server. The URL to check your tags is [https://cs230.kaist.ac.kr/cs[your_student_id]/lab1/tags]().
 
 ## 6. Grading
 
