@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+curl -v --proxy http://localhost:33252 http://localhost:33253
